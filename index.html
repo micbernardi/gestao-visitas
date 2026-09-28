@@ -97,6 +97,7 @@ input[type=number]{width:84px}
 .ins li.bad{border-left-color:var(--red);background:#FDF0F0}
 
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.grid2.g12{grid-template-columns:minmax(300px,1fr) 2fr}
 .chartbox{position:relative;height:270px}
 
 /* Tabelas */
@@ -107,7 +108,7 @@ td{padding:6px 9px;border-bottom:1px solid #E7ECF1;vertical-align:middle}
 tr:nth-child(even) td{background:#FAFBFD}
 td.n,th.n{text-align:right;font-variant-numeric:tabular-nums}
 table.compacta{width:auto;min-width:0}
-table.compacta th,table.compacta td{padding:6px 14px}
+table.compacta th,table.compacta td{padding:6px 14px;white-space:nowrap}
 table.compacta td:first-child{min-width:190px}
 tr.click{cursor:pointer} tr.click:hover td{background:var(--ice)}
 .bar{height:8px;background:#E7ECF1;border-radius:4px;min-width:70px;position:relative;overflow:hidden}
@@ -145,7 +146,7 @@ dialog#dlgConf::backdrop{background:rgba(14,42,71,.45)}
 
 @media (max-width:1200px){.kpis{grid-template-columns:repeat(3,1fr)}}
 @media (max-width:1000px){.kpis{grid-template-columns:repeat(2,1fr)}.sema{grid-template-columns:auto 1fr}.sema .col:nth-child(3),.sema .col.acao{grid-column:1/-1}}
-@media (max-width:820px){.hero,.grid2{grid-template-columns:1fr}.mode{margin-left:0}}
+@media (max-width:820px){.hero,.grid2,.grid2.g12{grid-template-columns:1fr}.mode{margin-left:0}}
 @media (max-width:480px){.kpis{grid-template-columns:1fr}.top,.slicers,.wrap{padding-left:12px;padding-right:12px}}
 @media (prefers-reduced-motion:reduce){.drawer,.toast{transition:none}}
 </style>
@@ -996,10 +997,10 @@ function render(){
   ${!est && A.temSeq ? `<section class="tile"><h3>Em que semana cada categoria foi visitada?</h3>${htmlLeituraTempo(A)}<div class="chartbox" style="height:280px"><canvas id="ch6"></canvas></div>
     <p class="small muted" style="margin:8px 0 0">Percentual acumulado de médicos visitados em cada dia útil do ${S.T.n}º ciclo. Passe o mouse no gráfico para ver a data e o percentual de cada TOP. As marcas no eixo são o fim de cada semana de campo (4,5 dias úteis: seg a qui + sexta até 14h, sem reunião de ciclo e feriados). A linha tracejada é a meta do TOP 1. Linha do TOP 1 acima das outras e perto da meta = foco nos prioritários no começo do ciclo.</p></section>
   <section class="tile">${htmlPendentes(A)}</section>` : ''}
-  <section class="grid2">
+  <section class="grid2 g12">
     <div class="tile"><h3>Como o PV classificou o painel</h3>${htmlClassif(A, M)}${htmlClassifTabela(A, M)}</div>
     ${multi ? `<div class="tile"><h3>Comparativo entre setores</h3><p class="hint">Clique num setor para abrir.</p>${htmlBench(validos)}</div>`
-            : `<div class="tile"><h3>Por especialidade</h3><p class="hint">${est ? 'Onde estão os TOP 1 e como está a cobertura de cada especialidade.' : 'Médicos TOP 1 ainda sem visita, por especialidade.'}</p>${htmlEsps(A, est)}</div>`}
+            : `<div class="tile"><h3>Por especialidade</h3><p class="hint">${est ? 'Quantos TOP 1 e 2 existem em cada especialidade e quantos médicos da especialidade foram visitados.' : 'Cada célula mostra quantos foram visitados do total daquele grupo.'}</p>${htmlEsps(A, est)}</div>`}
   </section>
   <section class="tile" id="cidTile">${htmlCidades(A, est)}</section>
   ${S.setor === 'ALL' ? `<section class="tile"><h3>Preenchimento por propagandista</h3><p class="hint">Só entram na análise os setores com categoria preenchida e estatística carregada.</p>${htmlPreench(todos)}</section>` : ''}
@@ -1304,7 +1305,7 @@ function abrirConferencia(k){
 function htmlClassifTabela(A, M){
   const linhas = CATS.map(c => [`TOP ${c}`, A.cats[c].cad]).concat(A.sem.cad ? [['Sem categoria', A.sem.cad]] : []);
   const tot = linhas.reduce((t, x) => t + x[1], 0);
-  return `<table><thead><tr><th>Categoria</th><th class="n">Médicos</th><th class="n">% do painel</th></tr></thead><tbody>
+  return `<table class="compacta"><thead><tr><th>TOP</th><th class="n">Médicos</th><th class="n">% do painel</th></tr></thead><tbody>
   ${linhas.map(([l, n]) => `<tr><td>${l}</td><td class="n">${fn(n)}</td><td class="n">${fp(n / tot)}</td></tr>`).join('')}</tbody></table>`;
 }
 function htmlClassif(A, M){
@@ -1349,11 +1350,22 @@ function htmlPendentes(A){
   </tbody></table></div>`;
 }
 function htmlEsps(A, est){
-  const rows = [...A.esps].sort((a,b) => b.miss1 - a.miss1 || b.n1 - a.n1);
-  if (!rows.length) return '<p class="muted">Sem especialidades cruzadas.</p>';
-  return `<div class="scroll" style="max-height:360px;overflow-y:auto"><table><thead><tr><th>Especialidade</th><th class="n">Médicos</th><th class="n">TOP 1</th><th class="n">TOP 2</th><th class="n">Visitados</th><th class="n">Cobertura</th><th class="n">TOP 1 sem visita${est ? ' (mín.)' : ''}</th></tr></thead><tbody>
-  ${rows.map(r => `<tr><td>${esc(r.esp)}</td><td class="n">${fn(r.N)}</td><td class="n">${fn(r.n1)}</td><td class="n">${fn(r.n2)}</td><td class="n">${fn(r.vis)}</td><td class="n">${fp(r.cov)}</td>
-    <td class="n">${r.miss1 ? `<span class="pill r">${r.miss1}</span>` : '<span class="muted">0</span>'}</td></tr>`).join('')}
+  if (!A.docs.length) return '<p class="muted">Sem especialidades cruzadas.</p>';
+  if (est){
+    // estimado: não dá para saber quais TOP 1 foram visitados, só quantos existem e a cobertura da especialidade
+    const rows = [...A.esps].sort((a,b) => b.n1 - a.n1 || b.N - a.N);
+    return `<div class="scroll" style="max-height:360px;overflow-y:auto"><table class="compacta"><thead><tr><th>Especialidade</th><th class="n">Visitados (todos os TOPs)</th><th class="n">TOP 1 no painel</th><th class="n">TOP 2 no painel</th></tr></thead><tbody>
+    ${rows.map(r => `<tr><td>${esc(r.esp)}</td><td class="n">${fn(r.vis)} de ${fn(r.cad ?? r.N)} <span class="muted small">(${fp(r.cov)})</span></td><td class="n">${fn(r.n1)}</td><td class="n">${fn(r.n2)}</td></tr>`).join('')}
+    </tbody></table></div>`;
+  }
+  // exato: cada célula = visitados de total
+  const g = new Map();
+  A.docs.forEach(d => { const k = d.espK; if (!g.has(k)) g.set(k, {esp: d.esp, n:0, v:0, n1:0, v1:0, n2:0, v2:0}); const x = g.get(k);
+    x.n++; if (d.visitado) x.v++; if (d.cat === 1){ x.n1++; if (d.visitado) x.v1++; } if (d.cat === 2){ x.n2++; if (d.visitado) x.v2++; } });
+  const rows = [...g.values()].sort((a, b) => (b.n1 - b.v1) - (a.n1 - a.v1) || b.n1 - a.n1 || b.n - a.n);
+  const cel = (v, n) => !n ? '<span class="muted">–</span>' : `${v} de ${n}${n - v ? ` <span class="pill r">faltam ${n - v}</span>` : ' <span class="pill g">todos</span>'}`;
+  return `<div class="scroll" style="max-height:360px;overflow-y:auto"><table class="compacta"><thead><tr><th>Especialidade</th><th class="n">TOP 1 visitados</th><th class="n">TOP 2 visitados</th><th class="n">Todos os médicos</th></tr></thead><tbody>
+  ${rows.map(r => `<tr><td>${esc(r.esp)}</td><td class="n">${cel(r.v1, r.n1)}</td><td class="n">${cel(r.v2, r.n2)}</td><td class="n">${r.v} de ${r.n} <span class="muted small">(${fp(r.v / r.n)})</span></td></tr>`).join('')}
   </tbody></table></div>`;
 }
 function htmlMedicos(A, est){
@@ -1366,14 +1378,14 @@ function htmlMedicos(A, est){
   const lim = 400, multi = S.setor === 'ALL';
   return `<h3>Médicos do painel</h3>
   <div class="row" style="margin-bottom:10px">
-    <label class="field">Categoria<select id="fCat">${[['all','Todas'], ...CATS.map(c => [String(c), String(c)]), ['0','Sem categoria']].map(o => `<option value="${o[0]}"${S.fCat === o[0] ? ' selected' : ''}>${o[1]}</option>`).join('')}</select></label>
+    <label class="field">TOP<select id="fCat">${[['all','Todos'], ...CATS.map(c => [String(c), 'TOP ' + c]), ['0','Sem categoria']].map(o => `<option value="${o[0]}"${S.fCat === o[0] ? ' selected' : ''}>${o[1]}</option>`).join('')}</select></label>
     ${est ? '' : `<label class="field">Visitado<select id="fVis">${[['all','Todos'],['nao','Não visitados'],['sim','Visitados']].map(o => `<option value="${o[0]}"${S.fVis === o[0] ? ' selected' : ''}>${o[1]}</option>`).join('')}</select></label>`}
     <label class="field">Cidade<select id="fCid"><option value="all">Todas</option>${porCidade(A).sort((a, b) => a.nome.localeCompare(b.nome)).map(c => `<option value="${esc(c.k)}"${S.fCid === c.k ? ' selected' : ''}>${esc(c.nome)}</option>`).join('')}</select></label>
     <label class="field">Busca<input type="search" id="fQ" value="${esc(S.q)}" placeholder="Nome, CRM, especialidade, cidade"></label>
     <span class="small muted" style="padding-bottom:7px">${fn(docs.length)} médicos${docs.length > lim ? `, mostrando os primeiros ${lim}` : ''}</span>
   </div>
   ${est ? '<p class="hint" style="margin-top:0">Com a estatística por especialidade não dá para saber quem foi visitado. A coluna mostra a cobertura da especialidade do médico.</p>' : ''}
-  <div class="scroll" style="max-height:440px;overflow-y:auto"><table><thead><tr>${multi ? '<th>Setor</th>' : ''}<th>Cat.</th><th>Médico</th><th>CRM</th><th>Especialidade</th><th>Cidade</th><th>${est ? 'Cob. da especialidade' : A.temSeq ? `Visita no ${esc(S.ciclo)}` : 'Visitas'}</th></tr></thead><tbody>
+  <div class="scroll" style="max-height:440px;overflow-y:auto"><table><thead><tr>${multi ? '<th>Setor</th>' : ''}<th>TOP</th><th>Médico</th><th>CRM</th><th>Especialidade</th><th>Cidade</th><th>${est ? 'Cob. da especialidade' : A.temSeq ? `Visita no ${esc(S.ciclo)}` : 'Visitas'}</th></tr></thead><tbody>
   ${docs.slice(0, lim).map(d => `<tr>${multi ? `<td class="small">${esc(d.setor)}</td>` : ''}<td>${d.cat ? `<span class="cat" style="background:${CAT_COR[d.cat]};${d.cat >= 4 ? 'color:#0E2A47' : ''}">${d.cat}</span>` : '<span class="muted small">–</span>'}</td>
     <td>${esc(d.nome)}</td><td class="small">${esc(d.crm)}</td><td class="small">${esc(d.esp)}</td><td class="small">${esc(d.cidade)}</td>
     <td>${est ? (d.cat === 1 && d.confirmado != null ? (d.confirmado ? '<span class="pill g">Conferido</span>' : '<span class="pill r">Não conferido</span>') : d.rateEsp != null ? fp(d.rateEsp) : '<span class="muted small">sem estatística</span>') : d.visitado ? `<span class="pill g">${d.primeira ? `${fmtD(d.primeira)} · S${d.semana}` : fn(d.visitas)}</span>` : `<span class="pill ${d.cat && d.cat <= 2 ? 'r' : 'x'}">Não visitado</span>${d.ultAnterior ? ` <span class="small muted">última ${fmtD(d.ultAnterior)}</span>` : ''}`}</td></tr>`).join('')}
