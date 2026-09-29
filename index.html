@@ -66,6 +66,18 @@ input[type=number]{width:84px}
 .sema .st{font-weight:600}
 .sema .st.verde{color:var(--green)} .sema .st.amarelo{color:#9A6B00} .sema .st.vermelho{color:var(--red)}
 .sema small{color:var(--muted);font-size:12px}
+/* Semáforos menores do TOP 2 e TOP 3 */
+.sema-minis{display:grid;grid-template-columns:repeat(2,1fr);gap:14px}
+.sema.mini{grid-template-columns:auto auto 1fr;gap:6px 18px;padding:10px 14px;border-left-width:5px}
+.sema.mini h3{font-size:13px}
+.sema.mini .col{gap:4px}
+.sema.mini .lamps{gap:7px;padding:6px 9px;border-radius:18px}
+.sema.mini .lamp{width:17px;height:17px}
+.sema.mini .lamp.on{box-shadow:0 0 8px currentColor}
+.sema.mini .big{font-size:30px}
+.sema.mini .st{font-size:13px}
+.sema.mini .meta-l{font-size:13px}
+.sema.mini .nota{font-size:11.5px}
 .leitura{font-size:13.5px;padding:8px 10px;border-radius:3px;margin:-2px 0 10px;background:#F6F9FC;border-left:4px solid var(--sky)}
 .leitura.ok{background:#EEF8F2;border-left-color:var(--green)}.leitura.warn{background:#FFF8E6;border-left-color:var(--yellow)}.leitura.bad{background:#FDF0F0;border-left-color:var(--red)}
 .legsem{display:grid;gap:3px;font-size:12.5px;color:var(--ink)}
@@ -110,6 +122,10 @@ td.n,th.n{text-align:right;font-variant-numeric:tabular-nums}
 table.compacta{width:auto;min-width:0}
 table.compacta th,table.compacta td{padding:6px 14px;white-space:nowrap}
 table.compacta td:first-child{min-width:190px}
+table.compacta.classif{width:100%}
+table.compacta.classif th,table.compacta.classif td{padding:6px 10px}
+table.compacta.classif td:first-child{min-width:0}
+table.compacta.classif th.n{white-space:normal;line-height:1.2}
 tr.click{cursor:pointer} tr.click:hover td{background:var(--ice)}
 .bar{height:8px;background:#E7ECF1;border-radius:4px;min-width:70px;position:relative;overflow:hidden}
 .bar i{position:absolute;inset:0 auto 0 0;border-radius:4px;background:var(--blue)}
@@ -118,6 +134,19 @@ tr.click{cursor:pointer} tr.click:hover td{background:var(--ice)}
 .cat{display:inline-block;width:22px;height:22px;line-height:22px;text-align:center;border-radius:3px;color:#fff;font-weight:700;font-size:12px}
 .muted{color:var(--muted)} .small{font-size:12px}
 .row{display:flex;flex-wrap:wrap;gap:10px 14px;align-items:flex-end}
+.flags{display:flex;flex-wrap:wrap;gap:4px}
+.flag{padding:5px 9px;border:1px solid var(--line);border-radius:3px;background:#fff;color:var(--ink);font:inherit;font-size:12.5px;cursor:pointer;display:inline-flex;align-items:center;gap:5px}
+.flag i{display:inline-block;width:10px;height:10px;border-radius:2px;border:1px solid var(--line)}
+.flag:hover{background:var(--ice)}
+.flag.on{border-color:var(--navy);background:var(--ice);font-weight:600}
+.flag.on i{border-color:transparent}
+.flag.limpa{border-style:dashed;color:var(--muted)}
+.selres{background:#F6F9FC;border:1px solid var(--line);border-left:4px solid var(--blue);border-radius:3px;padding:8px 12px;margin:0 0 10px;font-size:13px}
+.selres .tit{font-weight:600;color:var(--navy);margin-bottom:5px}
+.semrow{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+.semc{background:#fff;border:1px solid var(--line);border-radius:3px;padding:4px 9px;cursor:pointer;font:inherit;font-size:12.5px;color:var(--ink);text-align:left}
+.semc:hover{background:var(--ice)} .semc.on{border-color:var(--navy);background:var(--ice)}
+.semc b{color:var(--navy)} .semc small{color:var(--muted)}
 
 /* Estado vazio */
 .empty{max-width:720px;margin:40px auto;text-align:left}
@@ -146,7 +175,8 @@ dialog#dlgConf::backdrop{background:rgba(14,42,71,.45)}
 
 @media (max-width:1200px){.kpis{grid-template-columns:repeat(3,1fr)}}
 @media (max-width:1000px){.kpis{grid-template-columns:repeat(2,1fr)}.sema{grid-template-columns:auto 1fr}.sema .col:nth-child(3),.sema .col.acao{grid-column:1/-1}}
-@media (max-width:820px){.hero,.grid2,.grid2.g12{grid-template-columns:1fr}.mode{margin-left:0}}
+@media (max-width:1000px){.sema.mini{grid-template-columns:auto 1fr}.sema.mini .col:nth-child(3){grid-column:1/-1}}
+@media (max-width:820px){.sema-minis,.hero,.grid2,.grid2.g12{grid-template-columns:1fr}.mode{margin-left:0}}
 @media (max-width:480px){.kpis{grid-template-columns:1fr}.top,.slicers,.wrap{padding-left:12px;padding-right:12px}}
 @media (prefers-reduced-motion:reduce){.drawer,.toast{transition:none}}
 </style>
@@ -249,7 +279,7 @@ const S = {
   labels: {},   // setor -> nome do propagandista
   espMap: {},   // setor -> {especialidade do painel: especialidade da estatística} (ligação manual)
   setor: 'ALL',
-  fCat: 'all', fVis: 'all', fCid: 'all', q: '',
+  fCat: [], fEsp: 'all', fSem: 'all', fVis: 'all', fCid: 'all', q: '',
   ciclo: null, inicio: null, inicioManual: false,   // sequência de visitação
   charts: {}
 };
@@ -533,6 +563,7 @@ function sobreporPainel(ex, novo, fname){
     if (d.cat && d.cat !== a.cat){ a.cat = d.cat; a.catRaw = d.catRaw; atualizadas++; }
   });
   if (!ex.setor && novo.setor) ex.setor = novo.setor;
+  if (!ex.setorDet && novo.setorDet) ex.setorDet = novo.setorDet;
   ex.fontes = (ex.fontes || [ex.file]).concat(fname);
   toast(`${ex.rotulo}: ${atualizadas} categorias atualizadas${novos ? `, ${novos} médicos novos` : ''}`);
 }
@@ -566,10 +597,23 @@ function autoVincular(){
       if (!S.labels[s.setor] || S.labels[s.setor] === s.setor) S.labels[s.setor] = p.rotulo;
     }
   });
+  // Relatórios por médico (ex.: sequência de visitação) não têm especialidade agregada:
+  // compara pelos médicos em comum (CRM ou nome) — quanto dos visitados está no painel.
+  const medSetor = new Map();
+  S.stats.filter(s => s.kind === 'med' && s.setor).forEach(s => {
+    const m = medSetor.get(s.setor) || {crm:new Set(), nome:new Set()};
+    s.byCrm.forEach((_, x) => m.crm.add(x)); s.byNome.forEach((_, x) => m.nome.add(x));
+    medSetor.set(s.setor, m);
+  });
+  const sobrep = (p, m) => {
+    const tot = m.crm.size + m.nome.size; if (!tot) return 0;
+    let n = 0; p.docs.forEach(d => { if ((d.crm && m.crm.has(d.crm)) || (d.nomeK && m.nome.has(d.nomeK))) n++; });
+    return Math.min(1, n / Math.min(tot, p.docs.length || 1));
+  };
   const pares = [];
   livres.filter(p => !p.setor).forEach(p => {
     const vp = {}; p.docs.forEach(d => vp[d.espK] = (vp[d.espK] || 0) + 1);
-    porSetor.forEach((va, st) => { if (!ocupados.has(st)) pares.push({p, st, sim: cos(vp, va)}); });
+    porSetor.forEach((va, st) => { if (!ocupados.has(st)) pares.push({p, st, sim: Math.max(cos(vp, va), medSetor.has(st) ? sobrep(p, medSetor.get(st)) : 0)}); });
   });
   // atribuição gulosa: o par mais parecido primeiro, cada aba e cada setor usados uma vez
   pares.sort((x, y) => y.sim - x.sim);
@@ -591,6 +635,7 @@ function autoVincular(){
     }
     if (p.setor && (!S.labels[p.setor] || S.labels[p.setor] === p.setor)) S.labels[p.setor] = p.rotulo;
   }
+  S.panels.forEach(p => { if (!p.setor && !p.manual && p.setorDet){ p.setor = p.setorDet; p.auto = false; } });
 }
 
 /* =====================================================================
@@ -617,7 +662,11 @@ function vazio(key){
 /* Junta os painéis do setor (o último arquivo carregado prevalece para o mesmo médico) */
 function docsDoSetor(k){
   const m = new Map();
-  S.panels.filter(p => keyP(p) === k).forEach(p => p.docs.forEach(d => m.set((d.crm || d.nomeK) + '|' + d.espK, {...d, setor:k, catOrig:d.cat, cat: d.cat > ESC ? ESC : d.cat})));
+  S.panels.filter(p => keyP(p) === k).forEach(p => p.docs.forEach(d => {
+    const key = (d.crm || d.nomeK) + '|' + d.espK, a = m.get(key);
+    const cat = d.cat || (a && a.catOrig) || d.cat;
+    m.set(key, {...(a || {}), ...d, setor:k, catOrig:cat, cat: cat > ESC ? ESC : cat, catRaw: d.cat ? d.catRaw : (a ? a.catRaw : d.catRaw)});
+  }));
   return [...m.values()];
 }
 function analisarSetor(k){
@@ -878,11 +927,23 @@ function metricas(A){
     if (lo1 >= limV - 0.5) sem = 'verde';
     M_prova = hi1 < limA - 0.5;   // vermelho comprovado: nem com todos os visitados sendo TOP 1 daria
   }
+  // Semáforos do TOP 2 e TOP 3: mesma régua (meta e tolerância) do TOP 1
+  const semCat = {};
+  [2, 3].filter(c => A.cats[c]).forEach(c => {
+    const v = cov[c];
+    if (v == null){ semCat[c] = {sem:'cinza', prova:false}; return; }
+    let sc = v*100 >= limV - 0.5 ? 'verde' : v*100 >= limA - 0.5 ? 'amarelo' : 'vermelho', pr = false;
+    if (A.mode !== 'exato'){
+      if ((lo[c] ?? 0) * 100 >= limV - 0.5) sc = 'verde';
+      pr = (hi[c] ?? 0) * 100 < limA - 0.5;
+    }
+    semCat[c] = {sem:sc, prova:pr};
+  });
   const est12 = pct(A.cats[1].vis + A.cats[2].vis, A.cats[1].cad + A.cats[2].cad);
   const desvios = CATS.slice(-2).filter(c => cov[c] != null && cov1 != null && cov[c] > cov1 + 0.005)
     .map(c => ({c, cov:cov[c], comprovado: A.mode === 'exato' || (lo[c] != null && hi[1] != null && lo[c] > hi[1])}));
   const dCad = cc - A.cats[1].cad, dVis = cv - A.cats[1].vis;
-  return {cov, lo, hi, covW, covWlo:pct(A.wWorst, wc), covWhi:pct(A.wBest, wc), prio, cov1, ritmo, exec, sem, prova: M_prova, limV, limA, est12, desvios,
+  return {cov, lo, hi, covW, covWlo:pct(A.wWorst, wc), covWhi:pct(A.wBest, wc), prio, cov1, ritmo, exec, sem, prova: M_prova, semCat, limV, limA, est12, desvios,
           covG:pct(A.total.vis, A.total.cad), covC, cc, cv, dCov:pct(dVis, dCad), share1Cad:pct(A.cats[1].cad, cc), share1Vis:pct(A.cats[1].vis, cv)};
 }
 
@@ -989,6 +1050,7 @@ function render(){
   $('#app').innerHTML = `
   <section class="hero">
     ${htmlSemaforo(M, est && !A.confirmado, A)}
+    <div class="sema-minis">${[2, 3].map(c => htmlSemaforoMini(M, A, c)).join('')}</div>
     <div class="kpis">${htmlKpis(A, M, est)}</div>
   </section>
   ${htmlAlertas(M, est)}
@@ -1085,7 +1147,7 @@ function limparTudo(){
   if (!confirm('Remover todos os arquivos carregados?')) return;
   S.panels = []; S.stats = []; S.erros = []; S.labels = {}; S.espMap = {}; S.setor = 'ALL';
   S.ciclo = null; S.cicloN = null; S.ref = null; S.refManual = false; S.inicio = null; S.seqInfo = null;
-  S.fCat = 'all'; S.fVis = 'all'; S.fCid = 'all'; S.q = ''; S.dataEstat = null; S.momentoManual = false;
+  S.fCat = []; S.fEsp = 'all'; S.fSem = 'all'; S.fVis = 'all'; S.fCid = 'all'; S.q = ''; S.dataEstat = null; S.momentoManual = false;
   Object.values(S.charts).forEach(c => c.destroy()); S.charts = {};
   $('#inPainel').value = '';
   $('#sub').textContent = 'Os médicos prioritários estão recebendo a visita primeiro?';
@@ -1093,15 +1155,15 @@ function limparTudo(){
 }
 
 /* Meta do TOP 1 na semana atual e quanto falta para chegar nela */
-function gapMeta(A, M){
-  const cad = A.cats[1].cad, vis = A.cats[1].vis;
-  if (!cad || M.cov1 == null) return null;
+function gapMeta(A, M, c = 1){
+  const cad = A.cats[c].cad, cv = M.cov[c];
+  if (!cad || cv == null) return null;
   const meta = M.limV;
   // mínimo de médicos para atingir a meta; no consolidado, soma setor a setor (cada PV tem a sua meta)
-  const partes = A.partes && A.partes.length ? A.partes.map(a => a.cats[1]) : [A.cats[1]];
+  const partes = A.partes && A.partes.length ? A.partes.map(a => a.cats[c]) : [A.cats[c]];
   let precisa = 0, faltam = 0;
   partes.forEach(b => { if (!b.cad) return; const p = Math.min(b.cad, Math.ceil(meta / 100 * b.cad - 1e-9)); precisa += p; faltam += Math.max(0, p - Math.round(b.vis)); });
-  return {meta, pp: M.cov1 * 100 - meta, faltam, precisa, cad};
+  return {meta, pp: cv * 100 - meta, faltam, precisa, cad};
 }
 function htmlSemaforo(M, est, A){
   const g = gapMeta(A, M);
@@ -1142,6 +1204,36 @@ function htmlSemaforo(M, est, A){
       <div class="nota" title="${esc(regra)}">${regra}${dica ? ' ' + dica : ''}</div>
     </div>
     <div class="col acao">${botao}</div>
+  </div>`;
+}
+/* Semáforo menor do TOP 2 / TOP 3: mesma meta e tolerância do TOP 1 */
+function htmlSemaforoMini(M, A, c){
+  const b = A.cats[c], S2 = M.semCat[c];
+  if (!b || !S2) return '';
+  const est = A.mode !== 'exato';
+  if (S2.sem === 'cinza') return `<div class="tile sema mini"><div class="col"><h3 style="margin:0">Semáforo do TOP ${c}</h3><div class="muted small">Sem médicos TOP ${c} neste recorte.</div></div></div>`;
+  const g = gapMeta(A, M, c);
+  const on = x => S2.sem === x ? ' on' : '';
+  const faltam = g ? g.faltam : 0, precisa = g ? g.precisa : 0;
+  const cor = {verde:'Verde', amarelo:'Amarelo', vermelho:'Vermelho'}[S2.sem] + (est ? (S2.sem === 'vermelho' && S2.prova ? ' (comprovado)' : ' (estimado)') : '');
+  const vis = est ? Math.round(b.vis) : b.vis;
+  const situacao = faltam === 0 ? 'Meta cumprida' : `Faltam ${est ? 'cerca de ' : ''}${faltam} médico${faltam === 1 ? '' : 's'} TOP ${c}`;
+  const dica = est ? `Estimado: entre ${Math.round(b.min)} e ${Math.round(b.max)} médicos.` : '';
+  return `<div class="tile sema mini ${S2.sem}">
+    <div class="col">
+      <h3 style="margin:0">Semáforo do TOP ${c}</h3>
+      <div class="lamps" role="img" aria-label="Semáforo do TOP ${c}: ${cor}"><span class="lamp r${on('vermelho')}"></span><span class="lamp y${on('amarelo')}"></span><span class="lamp g${on('verde')}"></span></div>
+      <div class="st ${S2.sem}">${cor}</div>
+    </div>
+    <div class="col">
+      <div class="big">${est ? '≈ ' : ''}${fp(M.cov[c])}</div>
+      <div class="small muted">${est ? '≈ ' : ''}${vis} de ${b.cad} visitados</div>
+    </div>
+    <div class="col">
+      <div class="meta-l">Meta de agora: <b>${Math.round(M.limV)}%</b> (${precisa} de ${b.cad} médicos)</div>
+      <div class="meta-l"><b style="color:${faltam ? (S2.sem === 'vermelho' ? 'var(--red)' : '#9A6B00') : 'var(--green)'}">${situacao}</b></div>
+      ${dica ? `<div class="nota">${dica}</div>` : ''}
+    </div>
   </div>`;
 }
 function htmlKpis(A, M, est){
@@ -1303,10 +1395,12 @@ function abrirConferencia(k){
 }
 /* Leitura da classificação: tamanho do TOP 1 e pirâmide */
 function htmlClassifTabela(A, M){
-  const linhas = CATS.map(c => [`TOP ${c}`, A.cats[c].cad]).concat(A.sem.cad ? [['Sem categoria', A.sem.cad]] : []);
+  // [rótulo, médicos, visitados, estimado?] — no modo estimado o TOP 1 conferido vira exato
+  const linhas = CATS.map(c => [`TOP ${c}`, A.cats[c].cad, A.cats[c].vis, A.mode !== 'exato' && !(c === 1 && A.confirmado)])
+    .concat(A.sem.cad ? [['Sem categoria', A.sem.cad, A.sem.vis, A.mode !== 'exato']] : []);
   const tot = linhas.reduce((t, x) => t + x[1], 0);
-  return `<table class="compacta"><thead><tr><th>TOP</th><th class="n">Médicos</th><th class="n">% do painel</th></tr></thead><tbody>
-  ${linhas.map(([l, n]) => `<tr><td>${l}</td><td class="n">${fn(n)}</td><td class="n">${fp(n / tot)}</td></tr>`).join('')}</tbody></table>`;
+  return `<div class="scroll"><table class="compacta classif"><thead><tr><th>TOP</th><th class="n">Médicos</th><th class="n">% do painel</th><th class="n">% cobertura</th></tr></thead><tbody>
+  ${linhas.map(([l, n, v, e]) => `<tr><td>${l}</td><td class="n">${fn(n)}</td><td class="n">${fp(n / tot)}</td><td class="n" title="${e ? '≈ ' : ''}${fn(Math.round(v))} de ${fn(n)} visitados">${n ? (e ? '≈ ' : '') + fp(v / n) : '–'}</td></tr>`).join('')}</tbody></table></div>`;
 }
 function htmlClassif(A, M){
   if (!M.cc) return '';
@@ -1368,22 +1462,60 @@ function htmlEsps(A, est){
   ${rows.map(r => `<tr><td>${esc(r.esp)}</td><td class="n">${cel(r.v1, r.n1)}</td><td class="n">${cel(r.v2, r.n2)}</td><td class="n">${r.v} de ${r.n} <span class="muted small">(${fp(r.v / r.n)})</span></td></tr>`).join('')}
   </tbody></table></div>`;
 }
+/* Especialidades presentes no painel, para o filtro da tabela de médicos */
+function espsDoPainel(A){
+  const m = new Map();
+  A.docs.forEach(d => { if (!m.has(d.espK)) m.set(d.espK, {k: d.espK, esp: d.esp || '(sem especialidade)', n: 0}); m.get(d.espK).n++; });
+  return [...m.values()].sort((a, b) => a.esp.localeCompare(b.esp));
+}
+/* Resumo unificado da seleção: quantos médicos, quantos visitados e em que semana */
+function htmlResumoSelecao(sel, est, temSem, topsOn){
+  const nomeTop = topsOn.length ? topsOn.map(c => c === '0' ? 'Sem categoria' : 'TOP ' + c).join(' + ') : 'Todos os TOPs';
+  const partes = [nomeTop];
+  if (S.fEsp !== 'all' && sel[0]) partes.push(sel[0].esp);
+  if (S.fCid !== 'all' && sel[0]) partes.push(sel[0].cidade || 'Sem cidade');
+  if (S.q) partes.push(`busca "${esc(S.q)}"`);
+  const tit = `Seleção: ${partes.map(esc).join(' · ')}`;
+  if (!sel.length) return `<div class="selres"><div class="tit">${tit}</div><span class="muted">Nenhum médico nessa combinação.</span></div>`;
+  if (est) return `<div class="selres"><div class="tit">${tit}</div>${fn(sel.length)} médicos. Com a estatística por especialidade não dá para saber quais foram visitados.</div>`;
+  const vis = sel.filter(d => d.visitado).length, falta = sel.length - vis;
+  let semHtml = '';
+  if (temSem){
+    const n = Math.max(1, CFG.semanasCiclo); let acum = 0;
+    semHtml = `<div class="semrow">${Array.from({length: n}, (_, i) => {
+      const w = i + 1, q = sel.filter(d => d.visitado && d.semana === w).length; acum += q;
+      const futura = w > +CFG.semanaAtual;
+      return `<button type="button" class="semc${S.fSem === String(w) ? ' on' : ''}" data-sem="${w}" title="Listar os médicos visitados pela 1ª vez na semana ${w}">S${w}${w === +CFG.semanaAtual ? ' (atual)' : ''}: <b>${fn(q)}</b> <small>· acum. ${futura && !q ? '–' : fp(acum / sel.length)}</small></button>`;
+    }).join('')}${falta ? `<button type="button" class="semc${S.fVis === 'nao' && S.fSem === 'all' ? ' on' : ''}" data-sem="nao">Sem visita: <b>${fn(falta)}</b></button>` : ''}</div>`;
+  }
+  return `<div class="selres"><div class="tit">${tit}</div>${fn(sel.length)} médicos · <b>${fn(vis)}</b> visitados (<b>${fp(vis / sel.length)}</b>) · ${fn(falta)} sem visita no ciclo${temSem ? '. Por semana da 1ª visita (clique para listar):' : ''}${semHtml}</div>`;
+}
 function htmlMedicos(A, est){
+  // Seleção (grupo analisado): TOPs marcados + especialidade + cidade + busca
   let docs = A.docs;
-  if (S.fCat !== 'all') docs = docs.filter(d => String(d.cat) === S.fCat);
+  const topsOn = (S.fCat || []).filter(c => c === '0' || CATS.includes(+c));
+  if (topsOn.length) docs = docs.filter(d => topsOn.includes(String(d.cat || 0)));
+  if (S.fEsp !== 'all') docs = docs.filter(d => d.espK === S.fEsp);
   if (S.fCid !== 'all') docs = docs.filter(d => cidKey(d) === S.fCid);
-  if (!est && S.fVis !== 'all') docs = docs.filter(d => S.fVis === 'sim' ? d.visitado : !d.visitado);
   const q = norm(S.q); if (q) docs = docs.filter(d => norm(`${d.nome} ${d.crm} ${d.esp} ${d.cidade}`).includes(q));
+  const sel = docs; // base do resumo (antes dos filtros de visita)
+  const temSem = !est && A.temSeq;
+  if (!temSem) S.fSem = 'all';
+  if (temSem && S.fSem !== 'all') docs = docs.filter(d => d.visitado && d.semana === +S.fSem);
+  if (!est && S.fVis !== 'all') docs = docs.filter(d => S.fVis === 'sim' ? d.visitado : !d.visitado);
   docs = [...docs].sort((a,b) => (a.cat || 9) - (b.cat || 9) || (a.visitado === b.visitado ? 0 : a.visitado ? 1 : -1) || a.nome.localeCompare(b.nome));
   const lim = 400, multi = S.setor === 'ALL';
   return `<h3>Médicos do painel</h3>
   <div class="row" style="margin-bottom:10px">
-    <label class="field">TOP<select id="fCat">${[['all','Todos'], ...CATS.map(c => [String(c), 'TOP ' + c]), ['0','Sem categoria']].map(o => `<option value="${o[0]}"${S.fCat === o[0] ? ' selected' : ''}>${o[1]}</option>`).join('')}</select></label>
+    <div class="field"><span>TOP <span style="opacity:.75">· marque um ou mais</span></span><div class="flags">${[...CATS.map(c => [String(c), 'TOP ' + c]), ...(A.sem.cad ? [['0','Sem cat.']] : [])].map(o => `<button type="button" class="flag${topsOn.includes(o[0]) ? ' on' : ''}" data-flag="${o[0]}" aria-pressed="${topsOn.includes(o[0])}"><i style="background:${topsOn.includes(o[0]) ? CAT_COR[+o[0]] : '#fff'}"></i>${o[1]}</button>`).join('')}${topsOn.length ? '<button type="button" class="flag limpa" data-flag="all">Todos</button>' : ''}</div></div>
+    <label class="field">Especialidade<select id="fEsp"><option value="all">Todas</option>${espsDoPainel(A).map(e => `<option value="${esc(e.k)}"${S.fEsp === e.k ? ' selected' : ''}>${esc(e.esp)} (${e.n})</option>`).join('')}</select></label>
     ${est ? '' : `<label class="field">Visitado<select id="fVis">${[['all','Todos'],['nao','Não visitados'],['sim','Visitados']].map(o => `<option value="${o[0]}"${S.fVis === o[0] ? ' selected' : ''}>${o[1]}</option>`).join('')}</select></label>`}
+    ${temSem ? `<label class="field">Semana da visita<select id="fSem"><option value="all">Todas</option>${Array.from({length: Math.max(1, CFG.semanasCiclo)}, (_, i) => `<option value="${i + 1}"${S.fSem === String(i + 1) ? ' selected' : ''}>Semana ${i + 1}${i + 1 === +CFG.semanaAtual ? ' (atual)' : ''}</option>`).join('')}</select></label>` : ''}
     <label class="field">Cidade<select id="fCid"><option value="all">Todas</option>${porCidade(A).sort((a, b) => a.nome.localeCompare(b.nome)).map(c => `<option value="${esc(c.k)}"${S.fCid === c.k ? ' selected' : ''}>${esc(c.nome)}</option>`).join('')}</select></label>
     <label class="field">Busca<input type="search" id="fQ" value="${esc(S.q)}" placeholder="Nome, CRM, especialidade, cidade"></label>
     <span class="small muted" style="padding-bottom:7px">${fn(docs.length)} médicos${docs.length > lim ? `, mostrando os primeiros ${lim}` : ''}</span>
   </div>
+  ${htmlResumoSelecao(sel, est, temSem, topsOn)}
   ${est ? '<p class="hint" style="margin-top:0">Com a estatística por especialidade não dá para saber quem foi visitado. A coluna mostra a cobertura da especialidade do médico.</p>' : ''}
   <div class="scroll" style="max-height:440px;overflow-y:auto"><table><thead><tr>${multi ? '<th>Setor</th>' : ''}<th>TOP</th><th>Médico</th><th>CRM</th><th>Especialidade</th><th>Cidade</th><th>${est ? 'Cob. da especialidade' : A.temSeq ? `Visita no ${esc(S.ciclo)}` : 'Visitas'}</th></tr></thead><tbody>
   ${docs.slice(0, lim).map(d => `<tr>${multi ? `<td class="small">${esc(d.setor)}</td>` : ''}<td>${d.cat ? `<span class="cat" style="background:${CAT_COR[d.cat]};${d.cat >= 4 ? 'color:#0E2A47' : ''}">${d.cat}</span>` : '<span class="muted small">–</span>'}</td>
@@ -1540,7 +1672,7 @@ function renderDrawer(todos){
   $('#drawerBody').innerHTML = `
   <div><h4>Escala de categorias</h4>
     <label class="field" style="max-width:320px"><select id="cfgEsc">${[['auto','Automática (maior categoria usada)'],['4','1 a 4'],['5','1 a 5']].map(o => `<option value="${o[0]}"${String(CFG.escala) === o[0] ? ' selected' : ''}>${o[1]}</option>`).join('')}</select></label>
-    <p class="small muted">Em uso: 1 a ${ESC}. Com a escala fixa em 1 a 4, quem usou 5 tem esses médicos lidos como TOP 4. O semáforo olha só o TOP 1, então a escala não muda a meta.</p></div>
+    <p class="small muted">Em uso: 1 a ${ESC}. Com a escala fixa em 1 a 4, quem usou 5 tem esses médicos lidos como TOP 4. Os semáforos olham o TOP 1, o TOP 2 e o TOP 3, então a escala não muda a meta.</p></div>
   <div><h4>Pesos do índice de priorização</h4>
     <div class="row">${CATS.map(c => `<label class="field">TOP ${c}<input type="number" min="0" max="20" step="1" data-peso="${c}" value="${CFG.pesos[c]}"></label>`).join('')}</div>
     <p class="small muted">Índice = cobertura ponderada pelos pesos ÷ cobertura simples × 100. Acima de 100, as visitas estão mais concentradas nos médicos de peso alto.</p></div>
@@ -1590,7 +1722,20 @@ function ligarDashboard(A, est){
   });
   const redesenhaMedicos = () => { $('#medTile').innerHTML = htmlMedicos(A, est); ligarMedicos(); };
   const ligarMedicos = () => {
-    $('#fCat').onchange = e => { S.fCat = e.target.value; redesenhaMedicos(); };
+    document.querySelectorAll('#medTile [data-flag]').forEach(b => b.onclick = () => {
+      const v = b.dataset.flag;
+      if (v === 'all') S.fCat = [];
+      else S.fCat = S.fCat.includes(v) ? S.fCat.filter(x => x !== v) : [...S.fCat, v].sort();
+      redesenhaMedicos();
+    });
+    $('#fEsp').onchange = e => { S.fEsp = e.target.value; redesenhaMedicos(); };
+    if ($('#fSem')) $('#fSem').onchange = e => { S.fSem = e.target.value; if (S.fSem !== 'all') S.fVis = 'all'; redesenhaMedicos(); };
+    document.querySelectorAll('#medTile [data-sem]').forEach(b => b.onclick = () => {
+      const v = b.dataset.sem;
+      if (v === 'nao'){ const on = S.fVis === 'nao' && S.fSem === 'all'; S.fSem = 'all'; S.fVis = on ? 'all' : 'nao'; }
+      else { S.fSem = S.fSem === v ? 'all' : v; S.fVis = 'all'; }
+      redesenhaMedicos();
+    });
     $('#fCid').onchange = e => { S.fCid = e.target.value; redesenhaMedicos(); };
     if ($('#fVis')) $('#fVis').onchange = e => { S.fVis = e.target.value; redesenhaMedicos(); };
     $('#fQ').oninput = e => { S.q = e.target.value; clearTimeout(S._qt); S._qt = setTimeout(() => { redesenhaMedicos(); const f = $('#fQ'); f.focus(); f.setSelectionRange(f.value.length, f.value.length); }, 250); };
@@ -1640,10 +1785,12 @@ async function carregar(files){
           if (!setor && !multi) setor = detSetorNome(f.name) || detSetorConteudo(wb);
           const nomeAba = abaGenerica(g.aba) || /^MEDICOS?$/.test(norm(g.aba)) || detSetorNome(g.aba) ? '' : g.aba;
           const rotulo = multi ? (nomeAba || '') : (rotuloArquivo(f.name) || (wb.SheetNames.length === 1 ? nomeAba : ''));
-          const p = {id: ++UID, file: multi ? `${f.name} (aba ${g.aba}${g.setor ? `, setor ${g.setor}` : ''})` : f.name, setor, docs: g.docs, abas: 1, dup: g.dup, rotulo};
+          const p = {id: ++UID, file: multi ? `${f.name} (aba ${g.aba}${g.setor ? `, setor ${g.setor}` : ''})` : f.name, setor, setorDet: setor, docs: g.docs, abas: 1, dup: g.dup, rotulo};
           // Mesmo PV já carregado (outra versão do painel, ex.: a cópia que ele preencheu):
           // sobrepõe as categorias preenchidas e mantém o resto.
-          const ex = S.panels.find(q => (p.setor && q.setor === p.setor) || (!p.setor && p.rotulo && norm(q.rotulo) === norm(p.rotulo)));
+          // rótulos compatíveis: um vazio ou um contido no outro (ex.: "João" e "João preenchido"); evita juntar PVs diferentes com o mesmo código de distrital no nome
+          const rotOk = q => { const x = norm(q.rotulo || ''), y = norm(p.rotulo || ''); return !x || !y || x.includes(y) || y.includes(x); };
+          const ex = S.panels.find(q => (p.setor && (q.setor === p.setor || q.setorDet === p.setor) && rotOk(q)) || (!p.setor && p.rotulo && norm(q.rotulo) === norm(p.rotulo)));
           if (ex){ sobreporPainel(ex, p, f.name); return; }
           S.panels.push(p);
           const k = keyP(p); if (!S.labels[k] && p.rotulo) S.labels[k] = p.rotulo;
@@ -1674,7 +1821,7 @@ $('#btnLimparTop').onclick = limparTudo;
 $('#btnCfg').onclick = () => $('#drawer').classList.add('open');
 $('#btnClose').onclick = () => $('#drawer').classList.remove('open');
 document.addEventListener('keydown', e => { if (e.key === 'Escape') $('#drawer').classList.remove('open'); });
-$('#selSetor').onchange = e => { S.setor = e.target.value; S.fCat = 'all'; S.fVis = 'all'; S.fCid = 'all'; S.q = ''; render(); };
+$('#selSetor').onchange = e => { S.setor = e.target.value; S.fCat = []; S.fEsp = 'all'; S.fSem = 'all'; S.fVis = 'all'; S.fCid = 'all'; S.q = ''; render(); };
 $('#inCiclo').onchange = e => { S.cicloN = +e.target.value; S.ciclo = null; S.refManual = false; render(); };
 $('#inRef').onchange = e => { if (e.target.value){ S.ref = dataIso(e.target.value); S.refManual = true; S.cicloN = cicloDaData(S.ref); S.ciclo = null; } render(); };
 
