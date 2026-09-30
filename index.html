@@ -224,7 +224,7 @@ const CFG = {
   metaFinal: 90,                      // % do TOP 1 no fim do ciclo (curvas antecipada, linear e fixa)
   tolerancia: 15,                     // até quantos p.p. abaixo da meta da semana o sinal fica amarelo
   curva: 'prazo',                     // prazo: TOP 1 visitados até a semana X | antecipada | linear | fixa
-  marcos: [{sem:2, meta:90}, {sem:4, meta:100}],   // curva 'prazo': % acumulado do TOP 1 até o fim de cada semana-marco
+  marcos: [{sem:2, meta:75}, {sem:4, meta:100}],   // curva 'prazo': % acumulado do TOP 1 até o fim de cada semana-marco
   semanaAtual: 2,
   dia: 5,                             // último dia da semana contido nos dados (0 = semana não iniciada; 5 = sexta, semana completa)
   jornada: {1:['08:00','18:00'], 2:['08:00','18:00'], 3:['08:00','18:00'], 4:['08:00','18:00'], 5:['08:00','14:00']},
@@ -856,7 +856,7 @@ function metaEm(r){
   return CFG.metaFinal * f;
 }
 /* Curva por marcos: sobe em linha reta (dia a dia) de um marco ao seguinte.
-   Padrão: 0% no início, 90% no fim da 2ª semana, 100% no fim da 4ª, e 100% daí em diante. */
+   Padrão: 0% no início, 75% no fim da 2ª semana, 100% no fim da 4ª, e 100% daí em diante. */
 function metaMarcos(sem){
   const pts = [{sem:0, meta:0}, ...CFG.marcos.filter(m => m.sem > 0).sort((a, b) => a.sem - b.sem)];
   for (let i = 1; i < pts.length; i++){
@@ -990,12 +990,6 @@ function gerarInsights(A, M){
     L.push({t:'bad', m:`Pelo menos ${A.missPrio1 === 1 ? '1 médico TOP 1 ficou' : fn(A.missPrio1) + ' médicos TOP 1 ficaram'} sem visita, com certeza: há menos visitados do que médicos TOP 1 em ${A.missEsps.slice(0,5).join(', ')}${A.missEsps.length > 5 ? ' e outras' : ''}.`});
   if (A.missPrio1 > 0 && !est)
     L.push({t:'warn', m:`${A.missPrio1 === 1 ? '1 médico TOP 1 ainda está' : fn(A.missPrio1) + ' médicos TOP 1 ainda estão'} sem nenhuma visita no ciclo. ${A.temSeq ? 'A lista está no quadro "TOP 1 sem visita".' : 'Filtre a tabela de médicos por "Não visitados" para ver a lista.'}`});
-  if (M.cc > 0) CATS.forEach(c => {
-    const p = A.cats[c].cad / M.cc;
-    if (p > 0.6) L.push({t:'warn', m:`Classificação pouco seletiva: ${fp(p)} dos médicos classificados estão no TOP ${c}. Com a pirâmide achatada, o semáforo perde poder de diagnóstico.`});
-  });
-  if (M.share1Cad != null && M.share1Cad > 0.3)
-    L.push({t:'warn', m:`O TOP 1 reúne ${fp(M.share1Cad)} dos médicos classificados. Com uma lista prioritária tão grande, a meta do TOP 1 perde foco.`});
   if (S.setor === 'ALL' && CFG.escala === 'auto'){
     const esc = [...new Set(S.panels.filter(p => p.docs.some(d => d.cat)).map(p => escalaUsada(p.docs)))].filter(Boolean).sort();
     if (esc.length > 1) L.push({t:'warn', m:`Os propagandistas usaram escalas diferentes (${esc.map(e => `1 a ${e}`).join(' e ')}). Para comparar setores, fixe a escala em Critérios e arquivos.`});
@@ -1265,7 +1259,7 @@ function focoPV(A, M, est){
   if (d <= -0.10) return {v: nB.charAt(0).toUpperCase() + nB.slice(1), s, c:'r', nA, nB};
   return {v:'Sem foco', s: s + ' (parecidos)', c:'y', nA, nB};
 }
-/* Card da regra do 1º marco (padrão: 90% do TOP 1 até o fim da 2ª semana de campo).
+/* Card da regra do 1º marco (padrão: 75% do TOP 1 até o fim da 2ª semana de campo).
    Precisa das datas de visita (Sequência de Visitação). */
 function regraMarco(A){
   const m = [...CFG.marcos].sort((a, b) => a.sem - b.sem)[0];
@@ -1403,14 +1397,12 @@ function htmlClassifTabela(A, M){
   ${linhas.map(([l, n, v, e]) => `<tr><td>${l}</td><td class="n">${fn(n)}</td><td class="n">${fp(n / tot)}</td><td class="n" title="${e ? '≈ ' : ''}${fn(Math.round(v))} de ${fn(n)} visitados">${n ? (e ? '≈ ' : '') + fp(v / n) : '–'}</td></tr>`).join('')}</tbody></table></div>`;
 }
 function htmlClassif(A, M){
+  // Leitura neutra: TOP 1 maior ao longo do tempo é resultado do trabalho (médicos promovidos), não um problema
   if (!M.cc) return '';
-  const p1 = M.share1Cad, maior = CATS.reduce((m, c) => A.cats[c].cad > A.cats[m].cad ? c : m, 1), pm = A.cats[maior].cad / M.cc;
-  let t = 'ok', msg = `TOP 1 com <b>${fn(A.cats[1].cad)}</b> médicos (<b>${fp(p1)}</b> do painel), dentro da referência de 10% a 15%.`;
-  if (p1 > 0.2){ t = 'warn'; msg = `TOP 1 com <b>${fn(A.cats[1].cad)}</b> médicos (<b>${fp(p1)}</b> do painel), acima da referência de 10% a 15%: a lista prioritária está grande.`; }
-  else if (p1 < 0.08){ t = 'warn'; msg = `TOP 1 com <b>${fn(A.cats[1].cad)}</b> médicos (<b>${fp(p1)}</b> do painel), abaixo da referência de 10% a 15%: vale ver se não faltou alguém importante.`; }
-  if (pm > 0.6) msg += ` ${fp(pm)} dos médicos estão no TOP ${maior}: classificação pouco seletiva.`;
+  const partes = CATS.filter(c => A.cats[c].cad).map(c => `TOP ${c}: <b>${fn(A.cats[c].cad)}</b> (${fp(A.cats[c].cad / M.cc)})`);
+  let msg = `Distribuição dos <b>${fn(M.cc)}</b> médicos classificados: ${partes.join(' · ')}.`;
   if (A.sem.cad) msg += ` ${fn(A.sem.cad)} ainda sem categoria.`;
-  return `<div class="leitura ${t}">${msg}</div>`;
+  return `<div class="leitura">${msg}</div>`;
 }
 /* Linha do tempo (sequência de visitação) */
 const COR_LINHA = {1:'#D64545', 2:'#1F5FA8', 3:'#6FA8DC', 4:'#7A8B9C', 5:'#B8C4CF'};
