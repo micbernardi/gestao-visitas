@@ -122,13 +122,13 @@ th.ord .seta{display:inline-block;margin-left:6px;font-size:11px;opacity:.45}
 th.ord.on .seta{opacity:1}
 .fixa thead th{position:sticky;top:0;z-index:2}
 /* Tabela por cidade: colunas numéricas com a mesma largura e centralizadas, cidade ocupa o resto */
-table.cidTab{width:100%;min-width:760px;table-layout:fixed}
+table.cidTab{width:100%;min-width:980px;table-layout:fixed}
 table.cidTab th,table.cidTab td{padding:9px 10px}
 table.cidTab th{white-space:normal;line-height:1.3;vertical-align:middle}
 table.cidTab th.n,table.cidTab td.n{text-align:center}
 table.cidTab td:first-child{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 table.cidTab td.n .pill{min-width:26px;text-align:center}
-table.cidTab col.cid{width:24%}
+table.cidTab col.cid{width:17%}
 td{padding:6px 9px;border-bottom:1px solid #E7ECF1;vertical-align:middle}
 tr:nth-child(even) td{background:#FAFBFD}
 td.n,th.n{text-align:right;font-variant-numeric:tabular-nums}
@@ -1305,8 +1305,8 @@ function htmlRanking(A, M, est){
 }
 function htmlBench(lista){
   const rows = lista.map(a => ({a, M:metricas(a)})).sort((x,y) => (y.M.cov1 ?? -1) - (x.M.cov1 ?? -1));
-  return `<div class="scroll"><table><thead><tr><th>Setor</th><th class="n">Médicos</th><th class="n">Classificados</th><th class="n">Cob. geral</th><th class="n">Cob. TOP 1</th><th>Semáforo</th><th>Base</th></tr></thead><tbody>
-  ${rows.map(({a,M}) => `<tr class="click" data-setor="${esc(a.key)}" tabindex="0"><td>${esc(nomeSetor(a.key))}</td><td class="n">${fn(a.total.cad)}</td><td class="n">${fp(pct(M.cc, a.total.cad))}</td><td class="n">${fp(M.covG)}</td><td class="n"><b>${fp(M.cov1)}</b></td>
+  return `<div class="scroll"><table><thead><tr><th>Setor</th><th class="n">Médicos</th><th class="n">Classificados</th><th class="n">Cob. geral</th><th class="n">Cob. TOP 1</th><th class="n">Cob. TOP 2</th><th class="n">Cob. TOP 3</th><th>Semáforo</th><th>Base</th></tr></thead><tbody>
+  ${rows.map(({a,M}) => `<tr class="click" data-setor="${esc(a.key)}" tabindex="0"><td>${esc(nomeSetor(a.key))}</td><td class="n">${fn(a.total.cad)}</td><td class="n">${fp(pct(M.cc, a.total.cad))}</td><td class="n">${fp(M.covG)}</td><td class="n"><b>${fp(M.cov1)}</b></td><td class="n">${fp(M.cov[2])}</td><td class="n">${fp(M.cov[3])}</td>
     <td><span class="pill ${semCor(M.sem)}">${semTxt(M.sem)}</span>${M.desvios.length ? ' <span class="pill r">Desvio</span>' : ''}</td><td class="small muted">${a.mode === 'exato' ? 'Exata' : 'Estimada'}</td></tr>`).join('')}
   </tbody></table></div>`;
 }
@@ -1338,9 +1338,9 @@ function porCidade(A){
   const m = new Map();
   A.docs.forEach(d => {
     const k = cidKey(d);
-    if (!m.has(k)) m.set(k, {nome: d.cidade ? d.cidade.trim() : 'Sem cidade', tot: 0, cat: {0:0}, vis1: 0, vis: 0});
+    if (!m.has(k)) m.set(k, {nome: d.cidade ? d.cidade.trim() : 'Sem cidade', tot: 0, cat: {0:0}, visC: {}, vis1: 0, vis: 0});
     const c = m.get(k); c.tot++; c.cat[d.cat] = (c.cat[d.cat] || 0) + 1;
-    if (d.visitado){ c.vis++; if (d.cat === 1) c.vis1++; }
+    if (d.visitado){ c.vis++; c.visC[d.cat] = (c.visC[d.cat] || 0) + 1; if (d.cat === 1) c.vis1++; }
   });
   return [...m.entries()].map(([k, v]) => ({k, ...v}))
     .sort((a, b) => (b.cat[1] || 0) - (a.cat[1] || 0) || (b.cat[2] || 0) - (a.cat[2] || 0) || b.tot - a.tot);
@@ -1352,9 +1352,11 @@ function colsCid(est, tem0){
     {k:'tot', t:'Médicos', v: c => c.tot},
     ...CATS.map(n => ({k:'c' + n, t:'TOP ' + n, v: c => c.cat[n] || 0})),
     ...(tem0 ? [{k:'c0', t:'Sem cat.', v: c => c.cat[0] || 0}] : []),
-    ...(est ? [] : [{k:'vis1', t:'TOP 1 visitados', v: c => c.vis1}, {k:'sem1', t:'TOP 1 sem visita', v: c => (c.cat[1] || 0) - c.vis1}])
+    ...(est ? [] : [{k:'vis1', t:'TOP 1 visitados', v: c => c.vis1},
+      ...[1,2,3].filter(n => CATS.includes(n)).map(n => ({k:'sem' + n, t:'TOP ' + n + ' sem visita', v: c => semVisCid(c, n)}))])
   ];
 }
+const semVisCid = (c, n) => (c.cat[n] || 0) - (c.visC[n] || 0);
 /* Rótulo do cabeçalho com a seta presa à última palavra (a seta nunca cai sozinha na linha de baixo) */
 function rotuloSeta(t, seta){
   const r = t.replace(/TOP (\d)/g, 'TOP\u00a0$1'), i = r.lastIndexOf(' ');
@@ -1380,7 +1382,7 @@ function htmlCidades(A, est){
   <div>
     <div class="scroll fixa" id="cidScroll" style="max-height:420px;overflow-y:auto"><table class="cidTab"><colgroup>${cols.map(c => c.txt ? '<col class="cid">' : '<col>').join('')}</colgroup><thead><tr>${cols.map(thCid).join('')}</tr></thead><tbody>
     ${L.map(c => `<tr class="click" data-cid="${esc(c.k)}" tabindex="0"><td>${esc(c.nome)}</td><td class="n">${fn(c.tot)}</td>${CATS.map(k => `<td class="n">${c.cat[k] ? (k === 1 ? `<b>${c.cat[k]}</b>` : c.cat[k]) : '<span class="muted">–</span>'}</td>`).join('')}${tem0 ? `<td class="n">${c.cat[0] || '<span class="muted">–</span>'}</td>` : ''}
-      ${est ? '' : `<td class="n">${c.vis1 || '<span class="muted">0</span>'}</td><td class="n">${(c.cat[1] || 0) - c.vis1 ? `<span class="pill r">${(c.cat[1] || 0) - c.vis1}</span>` : '<span class="muted">0</span>'}</td>`}</tr>`).join('')}
+      ${est ? '' : `<td class="n">${c.vis1 || '<span class="muted">0</span>'}</td>${[1,2,3].filter(n => CATS.includes(n)).map(n => { const f = semVisCid(c, n); return `<td class="n">${f ? `<span class="pill ${n === 1 ? 'r' : 'y'}">${f}</span>` : '<span class="muted">0</span>'}</td>`; }).join('')}`}</tr>`).join('')}
     </tbody></table></div>
   </div>`;
 }
@@ -1442,7 +1444,7 @@ function htmlClassif(A, M){
   return `<div class="leitura">${msg}</div>`;
 }
 /* Linha do tempo (sequência de visitação) */
-const COR_LINHA = {1:'#D64545', 2:'#1F5FA8', 3:'#6FA8DC', 4:'#7A8B9C', 5:'#B8C4CF'};
+const COR_LINHA = {1:'#D64545', 2:'#1F5FA8', 3:'#1A9E8A', 4:'#8E5BC2', 5:'#E3A008'};
 function gruposTempo(){ return CATS.map(c => ({n:'TOP ' + c, cs:[c], cor: COR_LINHA[c] || '#9AA7B4'})); }
 function curvaGrupo(A, cs){
   const ds = A.docs.filter(d => cs.includes(d.cat)), n = ds.length;
