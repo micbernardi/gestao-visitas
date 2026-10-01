@@ -116,6 +116,19 @@ input[type=number]{width:84px}
 .scroll{overflow-x:auto}
 table{width:100%;border-collapse:collapse;font-size:13px}
 th{text-align:left;font-weight:600;color:#fff;background:var(--navy);padding:7px 9px;white-space:nowrap}
+th.ord{cursor:pointer;user-select:none}
+th.ord:hover{background:#1A3C63}
+th.ord .seta{display:inline-block;margin-left:6px;font-size:11px;opacity:.45}
+th.ord.on .seta{opacity:1}
+.fixa thead th{position:sticky;top:0;z-index:2}
+/* Tabela por cidade: colunas numéricas com a mesma largura e centralizadas, cidade ocupa o resto */
+table.cidTab{width:100%;min-width:760px;table-layout:fixed}
+table.cidTab th,table.cidTab td{padding:9px 10px}
+table.cidTab th{white-space:normal;line-height:1.3;vertical-align:middle}
+table.cidTab th.n,table.cidTab td.n{text-align:center}
+table.cidTab td:first-child{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+table.cidTab td.n .pill{min-width:26px;text-align:center}
+table.cidTab col.cid{width:24%}
 td{padding:6px 9px;border-bottom:1px solid #E7ECF1;vertical-align:middle}
 tr:nth-child(even) td{background:#FAFBFD}
 td.n,th.n{text-align:right;font-variant-numeric:tabular-nums}
@@ -279,7 +292,7 @@ const S = {
   labels: {},   // setor -> nome do propagandista
   espMap: {},   // setor -> {especialidade do painel: especialidade da estatística} (ligação manual)
   setor: 'ALL',
-  fCat: [], pendCat: [1], fEsp: 'all', fSem: 'all', fVis: 'all', fCid: 'all', q: '',
+  fCat: [], pendCat: [1], pendSort: {k: null, dir: 1}, cidSort: {k: null, dir: -1}, fEsp: 'all', fSem: 'all', fVis: 'all', fCid: 'all', q: '',
   ciclo: null, inicio: null, inicioManual: false,   // sequência de visitação
   charts: {}
 };
@@ -1332,21 +1345,45 @@ function porCidade(A){
   return [...m.entries()].map(([k, v]) => ({k, ...v}))
     .sort((a, b) => (b.cat[1] || 0) - (a.cat[1] || 0) || (b.cat[2] || 0) - (a.cat[2] || 0) || b.tot - a.tot);
 }
+/* Colunas da tabela por cidade; clique no cabeçalho ordena (números começam do maior, cidade de A a Z) */
+function colsCid(est, tem0){
+  return [
+    {k:'cidade', t:'Cidade', txt:true, v: c => c.nome},
+    {k:'tot', t:'Médicos', v: c => c.tot},
+    ...CATS.map(n => ({k:'c' + n, t:'TOP ' + n, v: c => c.cat[n] || 0})),
+    ...(tem0 ? [{k:'c0', t:'Sem cat.', v: c => c.cat[0] || 0}] : []),
+    ...(est ? [] : [{k:'vis1', t:'TOP 1 visitados', v: c => c.vis1}, {k:'sem1', t:'TOP 1 sem visita', v: c => (c.cat[1] || 0) - c.vis1}])
+  ];
+}
+/* Rótulo do cabeçalho com a seta presa à última palavra (a seta nunca cai sozinha na linha de baixo) */
+function rotuloSeta(t, seta){
+  const r = t.replace(/TOP (\d)/g, 'TOP\u00a0$1'), i = r.lastIndexOf(' ');
+  const ini = i < 0 ? '' : r.slice(0, i + 1), fim = i < 0 ? r : r.slice(i + 1);
+  return `${esc(ini)}<span style="white-space:nowrap">${esc(fim)}<span class="seta">${seta}</span></span>`;
+}
+function thCid(c){
+  const o = S.cidSort, on = o.k === c.k, seta = on ? (o.dir === 1 ? '▲' : '▼') : '↕';
+  return `<th class="ord${c.txt ? '' : ' n'}${on ? ' on' : ''}" data-csort="${c.k}" aria-sort="${on ? (o.dir === 1 ? 'ascending' : 'descending') : 'none'}" title="Clique para ordenar">${rotuloSeta(c.t, seta)}</th>`;
+}
 function htmlCidades(A, est){
-  const L = porCidade(A);
+  let L = porCidade(A);
   if (!A.docs.some(d => d.cidade)) return '<h3>Médicos por cidade</h3><p class="muted">O painel carregado não tem coluna de cidade.</p>';
   const tem0 = L.some(c => c.cat[0]);
-  const alt = Math.max(180, Math.min(L.length, 15) * 26 + 60);
+  const cols = colsCid(est, tem0), col = cols.find(c => c.k === S.cidSort.k);
+  if (col){
+    const d = S.cidSort.dir;
+    L = [...L].sort((a, b) => (col.txt ? String(col.v(a)).localeCompare(String(col.v(b)), 'pt-BR', {sensitivity:'base'}) : col.v(a) - col.v(b)) * d || a.nome.localeCompare(b.nome, 'pt-BR'));
+  }
+  const ordem = col ? `Ordenado por ${col.t} (${S.cidSort.dir === 1 ? (col.txt ? 'A a Z' : 'menor para maior') : (col.txt ? 'Z a A' : 'maior para menor')}).` : 'Ordenado pela quantidade de TOP 1: é por onde o roteiro das primeiras semanas deve passar.';
   return `<h3>Médicos por cidade</h3>
-  <p class="hint">Ordenado pela quantidade de TOP 1: é por onde o roteiro das primeiras semanas deve passar. ${est ? 'A estatística por especialidade não traz a cidade, então aqui aparece a composição do painel; com o relatório de visitas por médico, a tabela mostra também os TOP 1 visitados em cada cidade.' : ''} Clique numa cidade para ver os médicos.</p>
+  <p class="hint">${ordem} ${est ? 'A estatística por especialidade não traz a cidade, então aqui aparece a composição do painel; com o relatório de visitas por médico, a tabela mostra também os TOP 1 visitados em cada cidade.' : ''} Clique num cabeçalho para ordenar e numa cidade para ver os médicos.</p>
   <div>
-    <div class="scroll" style="max-height:420px;overflow-y:auto"><table class="compacta"><thead><tr><th>Cidade</th><th class="n">Médicos</th>${CATS.map(c => `<th class="n">TOP ${c}</th>`).join('')}${tem0 ? '<th class="n">Sem cat.</th>' : ''}${est ? '' : '<th class="n">TOP 1 visitados</th><th class="n">TOP 1 sem visita</th>'}</tr></thead><tbody>
+    <div class="scroll fixa" id="cidScroll" style="max-height:420px;overflow-y:auto"><table class="cidTab"><colgroup>${cols.map(c => c.txt ? '<col class="cid">' : '<col>').join('')}</colgroup><thead><tr>${cols.map(thCid).join('')}</tr></thead><tbody>
     ${L.map(c => `<tr class="click" data-cid="${esc(c.k)}" tabindex="0"><td>${esc(c.nome)}</td><td class="n">${fn(c.tot)}</td>${CATS.map(k => `<td class="n">${c.cat[k] ? (k === 1 ? `<b>${c.cat[k]}</b>` : c.cat[k]) : '<span class="muted">–</span>'}</td>`).join('')}${tem0 ? `<td class="n">${c.cat[0] || '<span class="muted">–</span>'}</td>` : ''}
       ${est ? '' : `<td class="n">${c.vis1 || '<span class="muted">0</span>'}</td><td class="n">${(c.cat[1] || 0) - c.vis1 ? `<span class="pill r">${(c.cat[1] || 0) - c.vis1}</span>` : '<span class="muted">0</span>'}</td>`}</tr>`).join('')}
     </tbody></table></div>
   </div>`;
 }
-/* Frase de leitura de cada gráfico */
 function htmlLeitura1(A, M, est){
   if (M.cov1 == null) return '';
   const t = {verde:'ok', amarelo:'warn', vermelho:'bad'}[M.sem] || '';
@@ -1424,13 +1461,40 @@ function htmlLeituraTempo(A){
   const ok = marcos.every(m => c1.ate(Math.floor(m.sem)) / n * 100 >= m.meta - 0.5);
   return `<div class="leitura ${marcos.length ? (ok ? 'ok' : 'bad') : ''}">TOP 1: ${partes.length ? partes.join('; ') + '.' : `${c1.ate(CFG.semanaAtual)} de ${n} visitados até agora.`}${foco}</div>`;
 }
+/* Ordenação da lista de pendentes: clique no cabeçalho alterna crescente / decrescente */
+const COLS_PEND = [
+  {k:'setor', t:'Setor', v: d => d.setor || ''},
+  {k:'cat', t:'TOP', v: d => d.cat},
+  {k:'nome', t:'Médico', v: d => d.nome || ''},
+  {k:'esp', t:'Especialidade', v: d => d.esp || ''},
+  {k:'cidade', t:'Cidade', v: d => d.cidade || ''},
+  {k:'ult', t:'Última visita', v: d => d.ultAnterior ? d.ultAnterior.getTime() : null},
+  // situação: nº de ciclos sem visita (maior = mais crítico); fora da sequência fica no fim
+  {k:'sit', t:'Situação', v: d => d.status ? (+(String(d.status).match(/\d+/) || [0])[0] || 0.5) : d.datas === undefined ? null : 0}
+];
+function ordenarPend(lista){
+  const o = S.pendSort, col = COLS_PEND.find(c => c.k === o.k);
+  if (!col) return lista;
+  return [...lista].sort((a, b) => {
+    const x = col.v(a), y = col.v(b);
+    if (x == null || x === '') return (y == null || y === '') ? 0 : 1;   // vazios sempre no fim
+    if (y == null || y === '') return -1;
+    const r = typeof x === 'number' && typeof y === 'number' ? x - y : String(x).localeCompare(String(y), 'pt-BR', {numeric: true, sensitivity: 'base'});
+    return r * o.dir;
+  });
+}
+function thPend(c){
+  const on = S.pendSort.k === c.k, seta = on ? (S.pendSort.dir === 1 ? '▲' : '▼') : '↕';
+  const aria = on ? (S.pendSort.dir === 1 ? 'ascending' : 'descending') : 'none';
+  return `<th class="ord${on ? ' on' : ''}" data-psort="${c.k}" aria-sort="${aria}" title="Clique para ordenar">${c.t}<span class="seta">${seta}</span></th>`;
+}
 function htmlPendentes(A){
   // categorias escolhidas no quadro (padrão: só TOP 1); ignora as que não existem na escala atual
   let cs = (S.pendCat || [1]).filter(c => CATS.includes(c));
   if (!cs.length) cs = [1];
   const nomeCats = cs.length === 1 ? `TOP ${cs[0]}` : `TOP ${cs.slice(0, -1).join(', ')} e ${cs[cs.length - 1]}`;
   const todos = A.docs.filter(d => cs.includes(d.cat));
-  const p = todos.filter(d => !d.visitado).sort((a, b) => a.cat - b.cat || (a.cidade || '').localeCompare(b.cidade || '') || a.nome.localeCompare(b.nome));
+  const p = ordenarPend(todos.filter(d => !d.visitado).sort((a, b) => a.cat - b.cat || (a.cidade || '').localeCompare(b.cidade || '') || a.nome.localeCompare(b.nome)));
   const falta = c => A.docs.filter(d => d.cat === c && !d.visitado).length;
   const flags = `<div class="flags" style="margin:0 0 10px">${CATS.map(c => { const on = cs.includes(c);
     return `<button type="button" class="flag${on ? ' on' : ''}" data-pend="${c}" aria-pressed="${on}"><i style="background:${on ? CAT_COR[c] : '#fff'}"></i>TOP ${c} <span class="muted">· ${fn(falta(c))}</span></button>`; }).join('')}</div>`;
@@ -1439,7 +1503,7 @@ function htmlPendentes(A){
   const multi = cs.length > 1;
   const resumo = multi ? `<p class="hint">${cs.map(c => `TOP ${c}: <b>${fn(falta(c))}</b> de ${fn(A.docs.filter(d => d.cat === c).length)}`).join(' · ')}</p>` : '';
   return `<h3>${nomeCats} sem visita no ${ciclo}: ${fn(p.length)} de ${fn(todos.length)}</h3>${flags}${resumo}
-  <div class="scroll"><table><thead><tr>${S.setor === 'ALL' ? '<th>Setor</th>' : ''}<th>TOP</th><th>Médico</th><th>Especialidade</th><th>Cidade</th><th>Última visita</th><th>Situação</th></tr></thead><tbody>
+  <div class="scroll"><table><thead><tr>${COLS_PEND.filter(c => c.k !== 'setor' || S.setor === 'ALL').map(thPend).join('')}</tr></thead><tbody>
   ${p.map(d => `<tr>${S.setor === 'ALL' ? `<td class="small">${esc(d.setor)}</td>` : ''}<td class="small"><b>TOP ${d.cat}</b></td><td>${esc(d.nome)}</td><td class="small">${esc(d.esp)}</td><td class="small">${esc(d.cidade)}</td>
     <td class="small">${d.ultAnterior ? fmtD(d.ultAnterior) + '/' + d.ultAnterior.getFullYear() : '<span class="muted">sem registro</span>'}</td>
     <td class="small">${d.status ? `<span class="pill r">${esc(d.status)}</span>` : d.datas === undefined ? '<span class="muted">fora da sequência</span>' : ''}</td></tr>`).join('')}
@@ -1450,7 +1514,7 @@ function htmlEsps(A, est){
   if (est){
     // estimado: não dá para saber quais TOP 1 foram visitados, só quantos existem e a cobertura da especialidade
     const rows = [...A.esps].sort((a,b) => b.n1 - a.n1 || b.N - a.N);
-    return `<div class="scroll" style="max-height:360px;overflow-y:auto"><table class="compacta"><thead><tr><th>Especialidade</th><th class="n">Visitados (todos os TOPs)</th><th class="n">TOP 1 no painel</th><th class="n">TOP 2 no painel</th></tr></thead><tbody>
+    return `<div class="scroll fixa" style="max-height:360px;overflow-y:auto"><table class="compacta"><thead><tr><th>Especialidade</th><th class="n">Visitados (todos os TOPs)</th><th class="n">TOP 1 no painel</th><th class="n">TOP 2 no painel</th></tr></thead><tbody>
     ${rows.map(r => `<tr><td>${esc(r.esp)}</td><td class="n">${fn(r.vis)} de ${fn(r.cad ?? r.N)} <span class="muted small">(${fp(r.cov)})</span></td><td class="n">${fn(r.n1)}</td><td class="n">${fn(r.n2)}</td></tr>`).join('')}
     </tbody></table></div>`;
   }
@@ -1460,7 +1524,7 @@ function htmlEsps(A, est){
     x.n++; if (d.visitado) x.v++; if (d.cat === 1){ x.n1++; if (d.visitado) x.v1++; } if (d.cat === 2){ x.n2++; if (d.visitado) x.v2++; } });
   const rows = [...g.values()].sort((a, b) => (b.n1 - b.v1) - (a.n1 - a.v1) || b.n1 - a.n1 || b.n - a.n);
   const cel = (v, n) => !n ? '<span class="muted">–</span>' : `${v} de ${n}${n - v ? ` <span class="pill r">faltam ${n - v}</span>` : ' <span class="pill g">todos</span>'}`;
-  return `<div class="scroll" style="max-height:360px;overflow-y:auto"><table class="compacta"><thead><tr><th>Especialidade</th><th class="n">TOP 1 visitados</th><th class="n">TOP 2 visitados</th><th class="n">Todos os médicos</th></tr></thead><tbody>
+  return `<div class="scroll fixa" style="max-height:360px;overflow-y:auto"><table class="compacta"><thead><tr><th>Especialidade</th><th class="n">TOP 1 visitados</th><th class="n">TOP 2 visitados</th><th class="n">Todos os médicos</th></tr></thead><tbody>
   ${rows.map(r => `<tr><td>${esc(r.esp)}</td><td class="n">${cel(r.v1, r.n1)}</td><td class="n">${cel(r.v2, r.n2)}</td><td class="n">${r.v} de ${r.n} <span class="muted small">(${fp(r.v / r.n)})</span></td></tr>`).join('')}
   </tbody></table></div>`;
 }
@@ -1519,7 +1583,7 @@ function htmlMedicos(A, est){
   </div>
   ${htmlResumoSelecao(sel, est, temSem, topsOn)}
   ${est ? '<p class="hint" style="margin-top:0">Com a estatística por especialidade não dá para saber quem foi visitado. A coluna mostra a cobertura da especialidade do médico.</p>' : ''}
-  <div class="scroll" style="max-height:440px;overflow-y:auto"><table><thead><tr>${multi ? '<th>Setor</th>' : ''}<th>TOP</th><th>Médico</th><th>CRM</th><th>Especialidade</th><th>Cidade</th><th>${est ? 'Cob. da especialidade' : A.temSeq ? `Visita no ${esc(S.ciclo)}` : 'Visitas'}</th></tr></thead><tbody>
+  <div class="scroll fixa" style="max-height:440px;overflow-y:auto"><table><thead><tr>${multi ? '<th>Setor</th>' : ''}<th>TOP</th><th>Médico</th><th>CRM</th><th>Especialidade</th><th>Cidade</th><th>${est ? 'Cob. da especialidade' : A.temSeq ? `Visita no ${esc(S.ciclo)}` : 'Visitas'}</th></tr></thead><tbody>
   ${docs.slice(0, lim).map(d => `<tr>${multi ? `<td class="small">${esc(d.setor)}</td>` : ''}<td>${d.cat ? `<span class="cat" style="background:${CAT_COR[d.cat]};${d.cat >= 4 ? 'color:#0E2A47' : ''}">${d.cat}</span>` : '<span class="muted small">–</span>'}</td>
     <td>${esc(d.nome)}</td><td class="small">${esc(d.crm)}</td><td class="small">${esc(d.esp)}</td><td class="small">${esc(d.cidade)}</td>
     <td>${est ? (d.cat === 1 && d.confirmado != null ? (d.confirmado ? '<span class="pill g">Conferido</span>' : '<span class="pill r">Não conferido</span>') : d.rateEsp != null ? fp(d.rateEsp) : '<span class="muted small">sem estatística</span>') : d.visitado ? `<span class="pill g">${d.primeira ? `${fmtD(d.primeira)} · S${d.semana}` : fn(d.visitas)}</span>` : `<span class="pill ${d.cat && d.cat <= 2 ? 'r' : 'x'}">Não visitado</span>${d.ultAnterior ? ` <span class="small muted">última ${fmtD(d.ultAnterior)}</span>` : ''}`}</td></tr>`).join('')}
@@ -1722,12 +1786,21 @@ function ligarDashboard(A, est){
     if (!k){ toast('Escolha um setor no seletor para conferir os TOP 1'); return; }
     abrirConferencia(k);
   });
-  const ligarPend = () => document.querySelectorAll('#pendTile [data-pend]').forEach(b => b.onclick = () => {
-    const c = +b.dataset.pend, cur = (S.pendCat || [1]).filter(x => CATS.includes(x));
-    S.pendCat = cur.includes(c) ? cur.filter(x => x !== c) : [...cur, c].sort((x, y) => x - y);
-    if (!S.pendCat.length) S.pendCat = [c];   // sempre fica ao menos uma categoria marcada
-    $('#pendTile').innerHTML = htmlPendentes(A); ligarPend();
-  });
+  const redesenhaPend = () => { $('#pendTile').innerHTML = htmlPendentes(A); ligarPend(); };
+  const ligarPend = () => {
+    document.querySelectorAll('#pendTile [data-pend]').forEach(b => b.onclick = () => {
+      const c = +b.dataset.pend, cur = (S.pendCat || [1]).filter(x => CATS.includes(x));
+      S.pendCat = cur.includes(c) ? cur.filter(x => x !== c) : [...cur, c].sort((x, y) => x - y);
+      if (!S.pendCat.length) S.pendCat = [c];   // sempre fica ao menos uma categoria marcada
+      redesenhaPend();
+    });
+    document.querySelectorAll('#pendTile [data-psort]').forEach(th => th.onclick = () => {
+      const k = th.dataset.psort, o = S.pendSort;
+      // 1º clique: crescente (na situação, começa pelo mais crítico); clicar de novo inverte
+      S.pendSort = o.k === k ? {k, dir: -o.dir} : {k, dir: k === 'sit' ? -1 : 1};
+      redesenhaPend();
+    });
+  };
   if ($('#pendTile')) ligarPend();
   const redesenhaMedicos = () => { $('#medTile').innerHTML = htmlMedicos(A, est); ligarMedicos(); };
   const ligarMedicos = () => {
@@ -1750,10 +1823,19 @@ function ligarDashboard(A, est){
     $('#fQ').oninput = e => { S.q = e.target.value; clearTimeout(S._qt); S._qt = setTimeout(() => { redesenhaMedicos(); const f = $('#fQ'); f.focus(); f.setSelectionRange(f.value.length, f.value.length); }, 250); };
   };
   ligarMedicos();
-  document.querySelectorAll('tr[data-cid]').forEach(tr => {
-    const go = () => { S.fCid = tr.dataset.cid; redesenhaMedicos(); $('#medTile').scrollIntoView({behavior:'smooth', block:'start'}); };
-    tr.onclick = go; tr.onkeydown = e => { if (e.key === 'Enter') go(); };
-  });
+  const ligarCid = () => {
+    document.querySelectorAll('tr[data-cid]').forEach(tr => {
+      const go = () => { S.fCid = tr.dataset.cid; redesenhaMedicos(); $('#medTile').scrollIntoView({behavior:'smooth', block:'start'}); };
+      tr.onclick = go; tr.onkeydown = e => { if (e.key === 'Enter') go(); };
+    });
+    document.querySelectorAll('#cidTile [data-csort]').forEach(th => th.onclick = () => {
+      const k = th.dataset.csort, o = S.cidSort;
+      // 1º clique: números do maior para o menor, cidade de A a Z; clicar de novo inverte
+      S.cidSort = o.k === k ? {k, dir: -o.dir} : {k, dir: k === 'cidade' ? 1 : -1};
+      $('#cidTile').innerHTML = htmlCidades(A, est); ligarCid();
+    });
+  };
+  if ($('#cidTile')) ligarCid();
 }
 
 async function carregar(files){
