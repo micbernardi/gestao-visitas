@@ -1072,8 +1072,8 @@ function render(){
             : `<div class="tile"><h3>Por especialidade</h3><p class="hint">${est ? 'Quantos TOP 1 e 2 existem em cada especialidade e quantos médicos da especialidade foram visitados.' : 'Cada célula mostra quantos foram visitados do total daquele grupo.'}</p>${htmlEsps(A, est)}</div>`}
   </section>
   <section class="tile" id="cidTile">${htmlCidades(A, est)}</section>
-  ${S.setor === 'ALL' ? `<section class="tile"><h3>Preenchimento por propagandista</h3><p class="hint">Só entram na análise os setores com categoria preenchida e estatística carregada.</p>${htmlPreench(todos)}</section>` : ''}
-  <section class="tile" id="medTile">${htmlMedicos(A, est)}</section>`;
+  <section class="tile" id="medTile">${htmlMedicos(A, est)}</section>
+  ${S.setor === 'ALL' ? `<section class="tile"><h3>Preenchimento por propagandista</h3><p class="hint">Só entram na análise os setores com categoria preenchida e estatística carregada.</p>${htmlPreench(todos)}</section>` : ''}`;
 
   desenharGraficos(A, M, est);
   ligarDashboard(A, est);
