@@ -279,7 +279,7 @@ const S = {
   labels: {},   // setor -> nome do propagandista
   espMap: {},   // setor -> {especialidade do painel: especialidade da estatística} (ligação manual)
   setor: 'ALL',
-  fCat: [], fEsp: 'all', fSem: 'all', fVis: 'all', fCid: 'all', q: '',
+  fCat: [], pendCat: [1], fEsp: 'all', fSem: 'all', fVis: 'all', fCid: 'all', q: '',
   ciclo: null, inicio: null, inicioManual: false,   // sequência de visitação
   charts: {}
 };
@@ -1052,7 +1052,7 @@ function render(){
     <ul class="ins">${ins.map(i => `<li class="${i.t}">${esc(i.m)}</li>`).join('')}</ul></section>
   ${!est && A.temSeq ? `<section class="tile"><h3>Em que semana cada categoria foi visitada?</h3>${htmlLeituraTempo(A)}<div class="chartbox" style="height:280px"><canvas id="ch6"></canvas></div>
     <p class="small muted" style="margin:8px 0 0">Percentual acumulado de médicos visitados em cada dia útil do ${S.T.n}º ciclo. Passe o mouse no gráfico para ver a data e o percentual de cada TOP. As marcas no eixo são o fim de cada semana de campo (4,5 dias úteis: seg a qui + sexta até 14h, sem reunião de ciclo e feriados). A linha tracejada é a meta do TOP 1. Linha do TOP 1 acima das outras e perto da meta = foco nos prioritários no começo do ciclo.</p></section>
-  <section class="tile">${htmlPendentes(A)}</section>` : ''}
+  <section class="tile" id="pendTile">${htmlPendentes(A)}</section>` : ''}
   <section class="grid2 g12">
     <div class="tile"><h3>Como o PV classificou o painel</h3>${htmlClassif(A, M)}${htmlClassifTabela(A, M)}</div>
     ${multi ? `<div class="tile"><h3>Comparativo entre setores</h3><p class="hint">Clique num setor para abrir.</p>${htmlBench(validos)}</div>`
@@ -1425,12 +1425,22 @@ function htmlLeituraTempo(A){
   return `<div class="leitura ${marcos.length ? (ok ? 'ok' : 'bad') : ''}">TOP 1: ${partes.length ? partes.join('; ') + '.' : `${c1.ate(CFG.semanaAtual)} de ${n} visitados até agora.`}${foco}</div>`;
 }
 function htmlPendentes(A){
-  const p = A.docs.filter(d => d.cat === 1 && !d.visitado).sort((a, b) => (a.cidade || '').localeCompare(b.cidade || '') || a.nome.localeCompare(b.nome));
-  const n1 = A.docs.filter(d => d.cat === 1).length;
-  if (!p.length) return `<h3>TOP 1 sem visita no ${esc(S.ciclo || 'ciclo')}</h3><div class="leitura ok">Todos os ${n1} médicos TOP 1 foram visitados.</div>`;
-  return `<h3>TOP 1 sem visita no ${esc(S.ciclo || 'ciclo')}: ${p.length} de ${n1}</h3>
-  <div class="scroll"><table><thead><tr>${S.setor === 'ALL' ? '<th>Setor</th>' : ''}<th>Médico</th><th>Especialidade</th><th>Cidade</th><th>Última visita</th><th>Situação</th></tr></thead><tbody>
-  ${p.map(d => `<tr>${S.setor === 'ALL' ? `<td class="small">${esc(d.setor)}</td>` : ''}<td>${esc(d.nome)}</td><td class="small">${esc(d.esp)}</td><td class="small">${esc(d.cidade)}</td>
+  // categorias escolhidas no quadro (padrão: só TOP 1); ignora as que não existem na escala atual
+  let cs = (S.pendCat || [1]).filter(c => CATS.includes(c));
+  if (!cs.length) cs = [1];
+  const nomeCats = cs.length === 1 ? `TOP ${cs[0]}` : `TOP ${cs.slice(0, -1).join(', ')} e ${cs[cs.length - 1]}`;
+  const todos = A.docs.filter(d => cs.includes(d.cat));
+  const p = todos.filter(d => !d.visitado).sort((a, b) => a.cat - b.cat || (a.cidade || '').localeCompare(b.cidade || '') || a.nome.localeCompare(b.nome));
+  const falta = c => A.docs.filter(d => d.cat === c && !d.visitado).length;
+  const flags = `<div class="flags" style="margin:0 0 10px">${CATS.map(c => { const on = cs.includes(c);
+    return `<button type="button" class="flag${on ? ' on' : ''}" data-pend="${c}" aria-pressed="${on}"><i style="background:${on ? CAT_COR[c] : '#fff'}"></i>TOP ${c} <span class="muted">· ${fn(falta(c))}</span></button>`; }).join('')}</div>`;
+  const ciclo = esc(S.ciclo || 'ciclo');
+  if (!p.length) return `<h3>${nomeCats} sem visita no ${ciclo}</h3>${flags}<div class="leitura ok">Todos os ${fn(todos.length)} médicos ${nomeCats} foram visitados.</div>`;
+  const multi = cs.length > 1;
+  const resumo = multi ? `<p class="hint">${cs.map(c => `TOP ${c}: <b>${fn(falta(c))}</b> de ${fn(A.docs.filter(d => d.cat === c).length)}`).join(' · ')}</p>` : '';
+  return `<h3>${nomeCats} sem visita no ${ciclo}: ${fn(p.length)} de ${fn(todos.length)}</h3>${flags}${resumo}
+  <div class="scroll"><table><thead><tr>${S.setor === 'ALL' ? '<th>Setor</th>' : ''}<th>TOP</th><th>Médico</th><th>Especialidade</th><th>Cidade</th><th>Última visita</th><th>Situação</th></tr></thead><tbody>
+  ${p.map(d => `<tr>${S.setor === 'ALL' ? `<td class="small">${esc(d.setor)}</td>` : ''}<td class="small"><b>TOP ${d.cat}</b></td><td>${esc(d.nome)}</td><td class="small">${esc(d.esp)}</td><td class="small">${esc(d.cidade)}</td>
     <td class="small">${d.ultAnterior ? fmtD(d.ultAnterior) + '/' + d.ultAnterior.getFullYear() : '<span class="muted">sem registro</span>'}</td>
     <td class="small">${d.status ? `<span class="pill r">${esc(d.status)}</span>` : d.datas === undefined ? '<span class="muted">fora da sequência</span>' : ''}</td></tr>`).join('')}
   </tbody></table></div>`;
@@ -1712,6 +1722,13 @@ function ligarDashboard(A, est){
     if (!k){ toast('Escolha um setor no seletor para conferir os TOP 1'); return; }
     abrirConferencia(k);
   });
+  const ligarPend = () => document.querySelectorAll('#pendTile [data-pend]').forEach(b => b.onclick = () => {
+    const c = +b.dataset.pend, cur = (S.pendCat || [1]).filter(x => CATS.includes(x));
+    S.pendCat = cur.includes(c) ? cur.filter(x => x !== c) : [...cur, c].sort((x, y) => x - y);
+    if (!S.pendCat.length) S.pendCat = [c];   // sempre fica ao menos uma categoria marcada
+    $('#pendTile').innerHTML = htmlPendentes(A); ligarPend();
+  });
+  if ($('#pendTile')) ligarPend();
   const redesenhaMedicos = () => { $('#medTile').innerHTML = htmlMedicos(A, est); ligarMedicos(); };
   const ligarMedicos = () => {
     document.querySelectorAll('#medTile [data-flag]').forEach(b => b.onclick = () => {
