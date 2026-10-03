@@ -237,7 +237,11 @@ const CFG = {
   metaFinal: 90,                      // % do TOP 1 no fim do ciclo (curvas antecipada, linear e fixa)
   tolerancia: 15,                     // até quantos p.p. abaixo da meta da semana o sinal fica amarelo
   curva: 'prazo',                     // prazo: TOP 1 visitados até a semana X | antecipada | linear | fixa
-  marcos: [{sem:2, meta:75}, {sem:4, meta:100}],   // curva 'prazo': % acumulado do TOP 1 até o fim de cada semana-marco
+  marcos: [{sem:2, meta:75, minDU:7, estenderAte:'ter'}, {sem:4, meta:100}],
+  /* curva 'prazo': % acumulado do TOP 1 até o fim de cada semana-marco (sexta da semana).
+     minDU: se até o fim da semana-marco o ciclo não tiver pelo menos esse total de dias úteis (ex.: feriado ou reunião
+     na 1ª/2ª semana), o marco estende até o dia da semana 'estenderAte' da semana seguinte (seg, ter, qua, qui ou sex).
+     Ex.: 9º ciclo → 2ª semana fecha com 6 dias úteis (< 7) → marco vai para terça 15/09 (8 dias úteis). */
   semanaAtual: 2,
   dia: 5,                             // último dia da semana contido nos dados (0 = semana não iniciada; 5 = sexta, semana completa)
   jornada: {1:['08:00','18:00'], 2:['08:00','18:00'], 3:['08:00','18:00'], 4:['08:00','18:00'], 5:['08:00','14:00']},
@@ -267,7 +271,8 @@ const CALENDARIO = {
     {n:12, ini:'2026-12-01', fim:'2027-01-11', reuniao:['2026-12-01','2027-01-11']}
   ]
 };
-const DU_SEMANA = 4.5;   // uma semana de campo = seg a qui (4) + sexta (0,5)
+const DU_SEMANA = 4.5;   // referência: uma semana cheia de campo = seg a qui (4) + sexta (0,5)
+const MIN_DU_ULTIMA_SEMANA = 2;   // sobra final menor que isso (ex.: só a segunda 05/10) entra na última semana em vez de virar uma semana nova
 let CATS = [1,2,3,4,5];   // categorias da escala em uso (recalculado a cada render)
 let ESC = 5;
 /* Escala efetiva: fixa (4 ou 5) ou automática pela maior categoria preenchida nos painéis.
@@ -829,12 +834,48 @@ function duEntre(c, ate){ // dias úteis do início do ciclo até a data (inclus
   for (let d = new Date(c.ini); d <= fim; d.setDate(d.getDate() + 1)) t += duDia(d, c);
   return t;
 }
-function fimDaSemana(c, k){ // data em que se completam k semanas de campo
-  let t = 0;
-  for (let d = new Date(c.ini); d <= c.fim; d.setDate(d.getDate() + 1)){ t += duDia(d, c); if (t >= k * DU_SEMANA - 1e-9) return new Date(d); }
-  return new Date(c.fim);
+/* Semanas do ciclo = semanas de calendário (segunda a sexta) a partir do início do ciclo, como no calendário oficial.
+   Ex.: 9º ciclo = 01–04/09, 07–11/09, 14–18/09, 21–25/09, 28/09–02/10 (+ a segunda 05/10 fechando a 5ª). */
+const semanasCiclo = c => {
+  if (c._sem) return c._sem;
+  const segunda = d => { const x = new Date(d); x.setDate(x.getDate() - ((x.getDay() + 6) % 7)); return x; };
+  const sem = []; let ini = new Date(c.ini), acum = 0;
+  while (ini <= c.fim){
+    const seg = segunda(ini), fimS = new Date(seg); fimS.setDate(seg.getDate() + 6);
+    const fim = fimS < c.fim ? fimS : new Date(c.fim);
+    let du = 0, ultDia = null;
+    for (let d = new Date(ini); d <= fim; d.setDate(d.getDate() + 1)) if (duDia(d, c) > 0){ du += duDia(d, c); ultDia = new Date(d); }
+    acum += du; sem.push({ini: new Date(ini), fim, ultDia: ultDia || fim, du, duAcum: acum});
+    ini = new Date(fimS); ini.setDate(ini.getDate() + 1);
+  }
+  while (sem.length > 1 && sem[sem.length - 1].du < MIN_DU_ULTIMA_SEMANA){ const u = sem.pop(), p = sem[sem.length - 1]; p.fim = u.fim; if (u.ultDia && u.du > 0) p.ultDia = u.ultDia; p.du += u.du; p.duAcum = u.duAcum; }
+  return (c._sem = sem);
+};
+function fimDaSemana(c, k){ const w = semanasCiclo(c); return new Date(w[Math.min(w.length, Math.max(1, Math.round(k))) - 1].ultDia); }  // último dia de campo da semana k
+const duAteSemana = (c, k) => { const w = semanasCiclo(c); return k <= 0 ? 0 : w[Math.min(w.length, Math.round(k)) - 1].duAcum; };     // dias úteis acumulados até o fim da semana k
+const semanaDU = (d, c) => { const w = semanasCiclo(c); const i = w.findIndex(x => d <= x.fim); return i < 0 ? w.length : i + 1; };     // semana do ciclo em que cai a data
+const semanaFrac = (c, du) => { // posição fracionária em semanas para um total de dias úteis decorridos (para a curva de meta dia a dia)
+  const w = semanasCiclo(c); let ant = 0;
+  for (let i = 0; i < w.length; i++){ if (du <= w[i].duAcum + 1e-9) return i + (w[i].du ? (du - ant) / w[i].du : 1); ant = w[i].duAcum; }
+  return w.length;
+};
+/* Resolve um marco em data e dias úteis para o ciclo c: fim da semana-marco, estendido quando não atinge minDU. */
+const DIAS_SEM = {seg:1, ter:2, qua:3, qui:4, sex:5};
+function marcoData(c, m){
+  const w = semanasCiclo(c), k = Math.min(w.length, Math.max(1, Math.round(m.sem)));
+  let data = new Date(w[k - 1].ultDia), du = w[k - 1].duAcum, estendido = false, semExt = k + 1;
+  if (m.minDU && du < m.minDU - 1e-9 && k < w.length){
+    const alvo = DIAS_SEM[m.estenderAte] || 5;
+    let ult = null, j = k;
+    for (; j < w.length && !ult; j++){ // semana seguinte; se ela não tiver dia de campo até o dia-alvo (ex.: Carnaval), pula para a próxima
+      for (let d = new Date(w[j].ini); d <= w[j].fim; d.setDate(d.getDate() + 1)){ const dw = (d.getDay() + 6) % 7 + 1; if (dw > alvo) break; if (duDia(d, c) > 0) ult = new Date(d); }
+    }
+    if (ult){ data = ult; du = duEntre(c, ult); estendido = true; semExt = j; }
+  }
+  const nomes = ['', 'segunda', 'terça', 'quarta', 'quinta', 'sexta'];
+  const rotulo = estendido ? `${nomes[(data.getDay() + 6) % 7 + 1]} da ${semExt}ª semana` : `fim da ${k}ª semana`;
+  return {data, du, semFrac: semanaFrac(c, du), rotulo, estendido};
 }
-const semanaDU = (d, c) => Math.max(1, Math.ceil(duEntre(c, d) / DU_SEMANA - 1e-9));
 const cicloDaData = d => { const c = CALENDARIO.ciclos.find(x => d >= dataIso(x.ini) && d <= dataIso(x.fim)); return c ? c.n : (d < dataIso(CALENDARIO.ciclos[0].ini) ? 1 : CALENDARIO.ciclos[CALENDARIO.ciclos.length - 1].n); };
 const fmtN = v => String(Math.round(v * 10) / 10).replace('.', ',');
 
@@ -849,8 +890,8 @@ function aplicarTempo(){
   S.ref = ref;
   const total = duEntre(c, c.fim), feitos = ref < c.ini ? 0 : duEntre(c, ref);
   S.T = {c, n: c.n, total, feitos, ref};
-  CFG.semanasCiclo = Math.max(1, Math.ceil(total / DU_SEMANA - 1e-9));
-  CFG.semanaAtual = Math.min(CFG.semanasCiclo, Math.max(1, Math.ceil(feitos / DU_SEMANA - 1e-9)));
+  CFG.semanasCiclo = semanasCiclo(c).length;
+  CFG.semanaAtual = ref < c.ini ? 1 : semanaDU(ref, c);
   S.inicio = c.ini;
 }
 const fracCiclo = () => S.T && S.T.total ? Math.min(1, S.T.feitos / S.T.total) : 0;
@@ -864,21 +905,21 @@ function metaEm(r){
   let f;
   if (CFG.curva === 'fixa') f = 1;
   else if (CFG.curva === 'linear') f = r;
-  else if (CFG.curva === 'prazo') return metaMarcos(r * (S.T ? S.T.total : n * DU_SEMANA) / DU_SEMANA);
+  else if (CFG.curva === 'prazo') return metaMarcos(S.T ? semanaFrac(S.T.c, r * S.T.total) : r * n);
   else f = 1 - Math.pow(1 - r, 2);
   return CFG.metaFinal * f;
 }
 /* Curva por marcos: sobe em linha reta (dia a dia) de um marco ao seguinte.
-   Padrão: 0% no início, 75% no fim da 2ª semana, 100% no fim da 4ª, e 100% daí em diante. */
+   Padrão: 0% no início, 75% no fim da 2ª semana, 100% no fim da 4ª, e 100% daí em diante. A posição em semanas é fracionária por dias úteis (semanaFrac). */
 function metaMarcos(sem){
-  const pts = [{sem:0, meta:0}, ...CFG.marcos.filter(m => m.sem > 0).sort((a, b) => a.sem - b.sem)];
+  const pts = [{sem:0, meta:0}, ...CFG.marcos.filter(m => m.sem > 0).map(m => ({sem: S.T ? marcoData(S.T.c, m).semFrac : m.sem, meta: m.meta})).sort((a, b) => a.sem - b.sem)];
   for (let i = 1; i < pts.length; i++){
     if (sem <= pts[i].sem){ const a = pts[i-1], b = pts[i]; return a.meta + (b.meta - a.meta) * (sem - a.sem) / (b.sem - a.sem); }
   }
   return pts[pts.length - 1].meta;
 }
-const marcosTxt = () => [...CFG.marcos].sort((a, b) => a.sem - b.sem).map(m => `${m.meta}% até o fim da ${m.sem}ª semana (${fmtN(m.sem * DU_SEMANA)} dias úteis)`).join(' e ');
-function metaSemana(w){ return CFG.curva === 'prazo' ? metaMarcos(w) : metaEm(S.T ? Math.min(1, w * DU_SEMANA / S.T.total) : w / Math.max(1, CFG.semanasCiclo)); }
+const marcosTxt = () => [...CFG.marcos].sort((a, b) => a.sem - b.sem).map(m => (S.T ? (md => `${m.meta}% até ${md.rotulo} (${fmtD(md.data)}, ${fmtN(md.du)} dias úteis)`)(marcoData(S.T.c, m)) : `${m.meta}% até o fim da ${m.sem}ª semana`)).join(' e ');
+function metaSemana(w){ return CFG.curva === 'prazo' ? metaMarcos(w) : metaEm(S.T ? Math.min(1, duAteSemana(S.T.c, w) / S.T.total) : w / Math.max(1, CFG.semanasCiclo)); }
 const curvaTxt = () => Array.from({length: Math.max(1, CFG.semanasCiclo)}, (_, i) => {
   const t = `S${i + 1} ${Math.round(metaSemana(i + 1))}%`; return i + 1 === +CFG.semanaAtual ? `<b>${t}</b>` : t; }).join(', ');
 const naSemana = momentoTxt;
@@ -1027,7 +1068,7 @@ function render(){
   $('#btnLimparTop').hidden = !(tem || S.erros.length);
   $('#inCiclo').innerHTML = CALENDARIO.ciclos.map(c => `<option value="${c.n}"${c.n === S.T.n ? ' selected' : ''}>${c.n}º ciclo (${fmtD(dataIso(c.ini))} a ${fmtD(dataIso(c.fim))})</option>`).join('');
   $('#inRef').value = isoD(S.T.ref);
-  $('#momentoTxt').textContent = `${fmtN(S.T.feitos)} de ${fmtN(S.T.total)} dias úteis do ${S.T.n}º ciclo (${fp(fracCiclo())}), semana de campo ${CFG.semanaAtual} de ${CFG.semanasCiclo}${S.seqInfo ? `. Sequência de visitação com visitas até ${fmtD(S.seqInfo.ref)}` : S.dataEstat ? `. Estatística gerada em ${fmtD(S.dataEstat)}` : ''}`;
+  $('#momentoTxt').textContent = `${fmtN(S.T.feitos)} de ${fmtN(S.T.total)} dias úteis do ${S.T.n}º ciclo (${fp(fracCiclo())}), semana ${CFG.semanaAtual} de ${CFG.semanasCiclo}${S.seqInfo ? `. Sequência de visitação com visitas até ${fmtD(S.seqInfo.ref)}` : S.dataEstat ? `. Estatística gerada em ${fmtD(S.dataEstat)}` : ''}`;
   if (!tem){ $('#app').innerHTML = htmlVazio() + S.erros.map(e => `<p class="warnbox" style="max-width:720px;margin:0 auto;width:100%">${esc(e)}</p>`).join(''); ligarVazio(); renderDrawer([]); return; }
 
   const keys = setorKeys();
@@ -1064,7 +1105,7 @@ function render(){
   <section class="tile"><h3>Leitura automática</h3>
     <ul class="ins">${ins.map(i => `<li class="${i.t}">${esc(i.m)}</li>`).join('')}</ul></section>
   ${!est && A.temSeq ? `<section class="tile"><h3>Em que semana cada categoria foi visitada?</h3>${htmlLeituraTempo(A)}<div class="chartbox" style="height:280px"><canvas id="ch6"></canvas></div>
-    <p class="small muted" style="margin:8px 0 0">Percentual acumulado de médicos visitados em cada dia útil do ${S.T.n}º ciclo. Passe o mouse no gráfico para ver a data e o percentual de cada TOP. As marcas no eixo são o fim de cada semana de campo (4,5 dias úteis: seg a qui + sexta até 14h, sem reunião de ciclo e feriados). A linha tracejada é a meta do TOP 1. Linha do TOP 1 acima das outras e perto da meta = foco nos prioritários no começo do ciclo.</p></section>
+    <p class="small muted" style="margin:8px 0 0">Percentual acumulado de médicos visitados em cada dia útil do ${S.T.n}º ciclo. Passe o mouse no gráfico para ver a data e o percentual de cada TOP. As marcas no eixo são o último dia de campo de cada semana do ciclo (semanas de calendário, como no calendário oficial; reunião de ciclo e feriados não contam como dia de campo). A linha tracejada é a meta do TOP 1. Linha do TOP 1 acima das outras e perto da meta = foco nos prioritários no começo do ciclo.</p></section>
   <section class="tile" id="pendTile">${htmlPendentes(A)}</section>` : ''}
   <section class="grid2 g12">
     <div class="tile"><h3>Como o PV classificou o painel</h3>${htmlClassif(A, M)}${htmlClassifTabela(A, M)}</div>
@@ -1178,7 +1219,7 @@ function htmlSemaforo(M, est, A){
   const b1 = A.cats[1], cad1 = b1.cad;
   const V = Math.round(M.limV), Am = Math.round(M.limA);
   const precisa = g ? g.precisa : 0;
-  const momento = `${S.T.n}º ciclo · visitas até ${fmtD(S.T.ref)} · ${fmtN(S.T.feitos)} de ${fmtN(S.T.total)} dias úteis (semana ${CFG.semanaAtual} de campo)`;
+  const momento = `${S.T.n}º ciclo · visitas até ${fmtD(S.T.ref)} · ${fmtN(S.T.feitos)} de ${fmtN(S.T.total)} dias úteis (semana ${CFG.semanaAtual} de ${CFG.semanasCiclo})`;
   const regra = CFG.curva === 'prazo' ? `Regra: TOP 1 visitada ${marcosTxt()}.` : `Regra: a meta cresce ao longo do ciclo até ${CFG.metaFinal}%.`;
   if (M.sem === 'cinza') return `<div class="tile sema"><h3 style="margin:0">Semáforo do TOP 1</h3><div class="muted">Sem médicos TOP 1 neste recorte.</div></div>`;
 
@@ -1272,19 +1313,20 @@ function focoPV(A, M, est){
   if (d <= -0.10) return {v: nB.charAt(0).toUpperCase() + nB.slice(1), s, c:'r', nA, nB};
   return {v:'Sem foco', s: s + ' (parecidos)', c:'y', nA, nB};
 }
-/* Card da regra do 1º marco (padrão: 75% do TOP 1 até o fim da 2ª semana de campo).
+/* Card da regra do 1º marco (padrão: 75% do TOP 1 até o fim da 2ª semana do ciclo).
    Precisa das datas de visita (Sequência de Visitação). */
 function regraMarco(A){
   const m = [...CFG.marcos].sort((a, b) => a.sem - b.sem)[0];
-  const titulo = `TOP 1 até a ${m.sem}ª semana`;
+  const md = S.T ? marcoData(S.T.c, m) : null;
+  const titulo = md ? `TOP 1 até ${md.rotulo}` : `TOP 1 até a ${m.sem}ª semana`;
   if (!A.temSeq || !S.T) return {titulo, v:'–', s:'precisa da Sequência de Visitação (datas das visitas)', c:''};
   const c1 = A.docs.filter(d => d.cat === 1), n = c1.length;
   if (!n) return {titulo, v:'–', s:'sem médicos TOP 1', c:''};
-  const limite = fimDaSemana(S.T.c, m.sem), concluida = S.T.feitos >= m.sem * DU_SEMANA - 1e-9;
+  const limite = md.data, concluida = S.T.feitos >= md.du - 1e-9;
   const v = c1.filter(d => d.primeira && d.primeira <= limite).length, p = v / n;
   const ok = p * 100 >= m.meta - 0.5;
-  if (!concluida) return {titulo, v:`${v} de ${n}`, s:`em andamento: prazo até ${fmtD(limite)}, meta ${m.meta}%`, c:''};
-  return {titulo, v:`${v} de ${n}`, s:`${fp(p)} até ${fmtD(limite)} · meta ${m.meta}% ${ok ? '✔ cumprida' : '✘ não cumprida'}`, c: ok ? 'g' : 'r'};
+  if (!concluida) return {titulo, v:`${v} de ${n}`, s:`em andamento: prazo até ${fmtD(limite)} (${fmtN(md.du)} dias úteis), meta ${m.meta}%`, c:''};
+  return {titulo, v:`${v} de ${n}`, s:`${fp(p)} até ${fmtD(limite)} (${fmtN(md.du)} dias úteis) · meta ${m.meta}% ${ok ? '✔ cumprida' : '✘ não cumprida'}`, c: ok ? 'g' : 'r'};
 }
 function htmlAlertas(M, est){
   const ds = M.desvios.filter(d => !est || d.comprovado);
@@ -1455,12 +1497,13 @@ function curvaGrupo(A, cs){
 function htmlLeituraTempo(A){
   const c1 = curvaGrupo(A, [1]), n = c1.n;
   if (!n) return '';
-  const marcos = CFG.curva === 'prazo' ? [...CFG.marcos].sort((a, b) => a.sem - b.sem).filter(m => m.sem * DU_SEMANA <= S.T.feitos + 1e-9) : [];
-  const partes = marcos.map(m => { const v = c1.ate(Math.floor(m.sem)); const ok = v / n * 100 >= m.meta - 0.5;
-    return `até o fim da ${Math.floor(m.sem)}ª semana (${fmtD(fimDaSemana(S.T.c, m.sem))}), <b>${v} de ${n}</b> (${fp(v / n)}) para meta de ${m.meta}% ${ok ? '✔' : '✘'}`; });
+  const marcos = CFG.curva === 'prazo' ? [...CFG.marcos].sort((a, b) => a.sem - b.sem).map(m => ({...m, md: marcoData(S.T.c, m)})).filter(m => m.md.du <= S.T.feitos + 1e-9) : [];
+  const ateData = (m) => A.docs.filter(d => d.cat === 1 && d.primeira && d.primeira <= m.md.data).length;
+  const partes = marcos.map(m => { const v = ateData(m); const ok = v / n * 100 >= m.meta - 0.5;
+    return `até ${m.md.rotulo} (${fmtD(m.md.data)}), <b>${v} de ${n}</b> (${fp(v / n)}) para meta de ${m.meta}% ${ok ? '✔' : '✘'}`; });
   const w1 = gruposTempo().map(g => ({g, p: curvaGrupo(A, g.cs).n ? curvaGrupo(A, g.cs).ate(1) / curvaGrupo(A, g.cs).n : null})).filter(x => x.p != null);
   const foco = w1.length > 1 ? ` Na 1ª semana: ${w1.map(x => `${x.g.n} ${fp(x.p)}`).join(', ')}.` : '';
-  const ok = marcos.every(m => c1.ate(Math.floor(m.sem)) / n * 100 >= m.meta - 0.5);
+  const ok = marcos.every(m => ateData(m) / n * 100 >= m.meta - 0.5);
   return `<div class="leitura ${marcos.length ? (ok ? 'ok' : 'bad') : ''}">TOP 1: ${partes.length ? partes.join('; ') + '.' : `${c1.ate(CFG.semanaAtual)} de ${n} visitados até agora.`}${foco}</div>`;
 }
 /* Ordenação da lista de pendentes: clique no cabeçalho alterna crescente / decrescente */
@@ -1689,7 +1732,7 @@ function desenharGraficos(A, M, est){
                    ticks:{autoSkip:false, maxRotation:0, callback:(v, i) => { const k = fimSem.indexOf(isoD(dias[i])); return k >= 0 ? `Sem. ${k + 1} (${fmtD(dias[i])})` : ''; }}}},
         plugins:{legend:{position:'bottom', labels:{boxWidth:14}},
           tooltip:{callbacks:{
-            title: it => { const d = dias[it[0].dataIndex]; return `${nomeDia[d.getDay()]}, ${fmtD(d)} · semana ${semanaDU(d, c)} de campo`; },
+            title: it => { const d = dias[it[0].dataIndex]; return `${nomeDia[d.getDay()]}, ${fmtD(d)} · ${semanaDU(d, c)}ª semana do ciclo`; },
             label: x => { if (x.raw == null) return null; const g = x.dataset._g;
               if (!g) return `Meta TOP 1: ${x.raw}%`;
               const n = g.ds.filter(d => d.primeira && d.primeira <= dias[x.dataIndex]).length;
@@ -1748,7 +1791,7 @@ function renderDrawer(todos){
     <div class="row">${CFG.curva === 'prazo' ? '' : `<label class="field">Meta no fim do ciclo (%)<input type="number" id="cfgV" min="0" max="100" value="${CFG.metaFinal}"></label>`}
     <label class="field">Amarelo até (p.p. abaixo)<input type="number" id="cfgA" min="0" max="100" value="${CFG.tolerancia}"></label>
     <label class="field">Ritmo esperado<select id="cfgR">${[['prazo','TOP 1 dentro do prazo'],['antecipada','Antecipado (curva)'],['linear','Linear'],['fixa','Meta cheia desde a 1ª semana']].map(o => `<option value="${o[0]}"${CFG.curva === o[0] ? ' selected' : ''}>${o[1]}</option>`).join('')}</select></label></div>
-    ${CFG.curva === 'prazo' ? `<div class="row" style="margin-top:8px">${CFG.marcos.map((m, i) => `<label class="field">Marco ${i + 1}: % do TOP 1<input type="number" min="0" max="100" data-marco-meta="${i}" value="${m.meta}"></label><label class="field">até o fim da semana<input type="number" min="0.2" max="12" step="0.2" data-marco-sem="${i}" value="${m.sem}"></label>`).join('')}</div>` : ''}
+    ${CFG.curva === 'prazo' ? `<div class="row" style="margin-top:8px">${CFG.marcos.map((m, i) => `<label class="field">Marco ${i + 1}: % do TOP 1<input type="number" min="0" max="100" data-marco-meta="${i}" value="${m.meta}"></label><label class="field">até o fim da semana<input type="number" min="1" max="12" step="1" data-marco-sem="${i}" value="${m.sem}"></label><label class="field">mín. dias úteis (0 = não estende)<input type="number" min="0" max="30" step="0.5" data-marco-min="${i}" value="${m.minDU || 0}"></label><label class="field">se não atingir, estende até<select data-marco-dia="${i}">${['seg','ter','qua','qui','sex'].map(d => `<option value="${d}"${(m.estenderAte || 'sex') === d ? ' selected' : ''}>${d} da semana seguinte</option>`).join('')}</select></label>`).join('')}</div>` : ''}
     <p class="small muted">Metas acumuladas: ${curvaTxt()}.${CFG.curva === 'prazo' ? ` A meta sobe dia a dia de um marco ao seguinte: ${marcosTxt()}.` : ''}</p></div>
   <div><h4>Arquivos carregados</h4>
     ${htmlArquivos()}
@@ -1767,7 +1810,9 @@ function renderDrawer(todos){
   if (a) a.onchange = () => { CFG.tolerancia = Math.max(0, +a.value || 0); render(); };
   const rr = $('#cfgR'); if (rr) rr.onchange = () => { CFG.curva = rr.value; render(); };
   $('#drawerBody').querySelectorAll('[data-marco-meta]').forEach(i => i.onchange = () => { CFG.marcos[+i.dataset.marcoMeta].meta = Math.min(100, Math.max(0, +i.value || 0)); render(); });
-  $('#drawerBody').querySelectorAll('[data-marco-sem]').forEach(i => i.onchange = () => { CFG.marcos[+i.dataset.marcoSem].sem = Math.max(0.2, +i.value || 1); render(); });
+  $('#drawerBody').querySelectorAll('[data-marco-sem]').forEach(i => i.onchange = () => { CFG.marcos[+i.dataset.marcoSem].sem = Math.max(1, Math.round(+i.value) || 1); render(); });
+  $('#drawerBody').querySelectorAll('[data-marco-min]').forEach(i => i.onchange = () => { CFG.marcos[+i.dataset.marcoMin].minDU = Math.max(0, +i.value || 0); render(); });
+  $('#drawerBody').querySelectorAll('[data-marco-dia]').forEach(i => i.onchange = () => { CFG.marcos[+i.dataset.marcoDia].estenderAte = i.value; render(); });
   ligarEdicao($('#drawerBody'));
 }
 
