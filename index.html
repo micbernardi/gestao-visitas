@@ -297,7 +297,7 @@ const S = {
   labels: {},   // setor -> nome do propagandista
   espMap: {},   // setor -> {especialidade do painel: especialidade da estatística} (ligação manual)
   setor: 'ALL',
-  fCat: [], pendCat: [1], pendSort: {k: null, dir: 1}, cidSort: {k: null, dir: -1}, fEsp: 'all', fSem: 'all', fVis: 'all', fCid: 'all', q: '',
+  fCat: [], pendCat: [1], pendSort: {k: null, dir: 1}, cidSort: {k: null, dir: -1}, medSort: {k: null, dir: 1}, fEsp: 'all', fSem: 'all', fVis: 'all', fCid: 'all', q: '',
   ciclo: null, inicio: null, inicioManual: false,   // sequência de visitação
   charts: {}
 };
@@ -1602,6 +1602,33 @@ function htmlResumoSelecao(sel, est, temSem, topsOn){
   }
   return `<div class="selres"><div class="tit">${tit}</div>${fn(sel.length)} médicos · <b>${fn(vis)}</b> visitados (<b>${fp(vis / sel.length)}</b>) · ${fn(falta)} sem visita no ciclo${temSem ? '. Por semana da 1ª visita (clique para listar):' : ''}${semHtml}</div>`;
 }
+/* Colunas da tabela de médicos; clique no cabeçalho ordena (mesma mecânica das tabelas de pendentes e cidades) */
+const COLS_MED = est => [
+  {k:'setor', t:'Setor', v: d => d.setor || ''},
+  {k:'cat', t:'TOP', v: d => d.cat || null},
+  {k:'nome', t:'Médico', v: d => d.nome || ''},
+  {k:'crm', t:'CRM', v: d => d.crm || ''},
+  {k:'esp', t:'Especialidade', v: d => d.esp || ''},
+  {k:'cidade', t:'Cidade', v: d => d.cidade || ''},
+  // visita: por data da 1ª visita (não visitados no fim); no modo estimado, pela cobertura da especialidade
+  {k:'vis', t:'', v: d => est ? (d.rateEsp != null ? d.rateEsp : null) : d.visitado ? (d.primeira ? d.primeira.getTime() : 0) : null}
+];
+function ordenarMed(lista, est){
+  const o = S.medSort, col = COLS_MED(est).find(c => c.k === o.k);
+  if (!col) return lista;
+  return [...lista].sort((a, b) => {
+    const x = col.v(a), y = col.v(b);
+    if (x == null || x === '') return (y == null || y === '') ? 0 : 1;   // vazios sempre no fim
+    if (y == null || y === '') return -1;
+    const r = typeof x === 'number' && typeof y === 'number' ? x - y : String(x).localeCompare(String(y), 'pt-BR', {numeric: true, sensitivity: 'base'});
+    return r * o.dir;
+  });
+}
+function thMed(c, rotulo){
+  const on = S.medSort.k === c.k, seta = on ? (S.medSort.dir === 1 ? '▲' : '▼') : '↕';
+  const aria = on ? (S.medSort.dir === 1 ? 'ascending' : 'descending') : 'none';
+  return `<th class="ord${on ? ' on' : ''}" data-msort="${c.k}" aria-sort="${aria}" title="Clique para ordenar">${rotulo ?? c.t}<span class="seta">${seta}</span></th>`;
+}
 function htmlMedicos(A, est){
   // Seleção (grupo analisado): TOPs marcados + especialidade + cidade + busca
   let docs = A.docs;
@@ -1615,8 +1642,8 @@ function htmlMedicos(A, est){
   if (!temSem) S.fSem = 'all';
   if (temSem && S.fSem !== 'all') docs = docs.filter(d => d.visitado && d.semana === +S.fSem);
   if (!est && S.fVis !== 'all') docs = docs.filter(d => S.fVis === 'sim' ? d.visitado : !d.visitado);
-  docs = [...docs].sort((a,b) => (a.cat || 9) - (b.cat || 9) || (a.visitado === b.visitado ? 0 : a.visitado ? 1 : -1) || a.nome.localeCompare(b.nome));
-  const lim = 400, multi = S.setor === 'ALL';
+  docs = ordenarMed([...docs].sort((a,b) => (a.cat || 9) - (b.cat || 9) || (a.visitado === b.visitado ? 0 : a.visitado ? 1 : -1) || a.nome.localeCompare(b.nome)), est);
+  const lim = 400, multi = S.setor === 'ALL', CM = COLS_MED(est), col = k => CM.find(c => c.k === k);
   return `<h3>Médicos do painel</h3>
   <div class="row" style="margin-bottom:10px">
     <div class="field"><span>TOP <span style="opacity:.75">· marque um ou mais</span></span><div class="flags">${[...CATS.map(c => [String(c), 'TOP ' + c]), ...(A.sem.cad ? [['0','Sem cat.']] : [])].map(o => `<button type="button" class="flag${topsOn.includes(o[0]) ? ' on' : ''}" data-flag="${o[0]}" aria-pressed="${topsOn.includes(o[0])}"><i style="background:${topsOn.includes(o[0]) ? CAT_COR[+o[0]] : '#fff'}"></i>${o[1]}</button>`).join('')}${topsOn.length ? '<button type="button" class="flag limpa" data-flag="all">Todos</button>' : ''}</div></div>
@@ -1629,7 +1656,7 @@ function htmlMedicos(A, est){
   </div>
   ${htmlResumoSelecao(sel, est, temSem, topsOn)}
   ${est ? '<p class="hint" style="margin-top:0">Com a estatística por especialidade não dá para saber quem foi visitado. A coluna mostra a cobertura da especialidade do médico.</p>' : ''}
-  <div class="scroll fixa" style="max-height:440px;overflow-y:auto"><table><thead><tr>${multi ? '<th>Setor</th>' : ''}<th>TOP</th><th>Médico</th><th>CRM</th><th>Especialidade</th><th>Cidade</th><th>${est ? 'Cob. da especialidade' : A.temSeq ? `Visita no ${esc(S.ciclo)}` : 'Visitas'}</th></tr></thead><tbody>
+  <div class="scroll fixa" style="max-height:440px;overflow-y:auto"><table><thead><tr>${multi ? thMed(col('setor')) : ''}${thMed(col('cat'))}${thMed(col('nome'))}${thMed(col('crm'))}${thMed(col('esp'))}${thMed(col('cidade'))}${thMed(col('vis'), est ? 'Cob. da especialidade' : A.temSeq ? `Visita no ${esc(S.ciclo)}` : 'Visitas')}</tr></thead><tbody>
   ${docs.slice(0, lim).map(d => `<tr>${multi ? `<td class="small">${esc(d.setor)}</td>` : ''}<td>${d.cat ? `<span class="cat" style="background:${CAT_COR[d.cat]};${d.cat >= 4 ? 'color:#0E2A47' : ''}">${d.cat}</span>` : '<span class="muted small">–</span>'}</td>
     <td>${esc(d.nome)}</td><td class="small">${esc(d.crm)}</td><td class="small">${esc(d.esp)}</td><td class="small">${esc(d.cidade)}</td>
     <td>${est ? (d.cat === 1 && d.confirmado != null ? (d.confirmado ? '<span class="pill g">Conferido</span>' : '<span class="pill r">Não conferido</span>') : d.rateEsp != null ? fp(d.rateEsp) : '<span class="muted small">sem estatística</span>') : d.visitado ? `<span class="pill g">${d.primeira ? `${fmtD(d.primeira)} · S${d.semana}` : fn(d.visitas)}</span>` : `<span class="pill ${d.cat && d.cat <= 2 ? 'r' : 'x'}">Não visitado</span>${d.ultAnterior ? ` <span class="small muted">última ${fmtD(d.ultAnterior)}</span>` : ''}`}</td></tr>`).join('')}
@@ -1868,6 +1895,11 @@ function ligarDashboard(A, est){
     });
     $('#fCid').onchange = e => { S.fCid = e.target.value; redesenhaMedicos(); };
     if ($('#fVis')) $('#fVis').onchange = e => { S.fVis = e.target.value; redesenhaMedicos(); };
+    document.querySelectorAll('#medTile [data-msort]').forEach(th => th.onclick = () => {
+      const k = th.dataset.msort, o = S.medSort;
+      S.medSort = o.k === k ? {k, dir: -o.dir} : {k, dir: 1};   // 1º clique: crescente; clicar de novo inverte
+      redesenhaMedicos();
+    });
     $('#fQ').oninput = e => { S.q = e.target.value; clearTimeout(S._qt); S._qt = setTimeout(() => { redesenhaMedicos(); const f = $('#fQ'); f.focus(); f.setSelectionRange(f.value.length, f.value.length); }, 250); };
   };
   ligarMedicos();
