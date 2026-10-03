@@ -395,8 +395,8 @@ function rotuloArquivoAntigo(fname){
 }
 
 /* Especialidade canônica: faz "GINECOLOGIA E OBSTETRICIA", "GO" e "GOB" caírem na mesma chave */
-const ESP_ALIAS = [
-  ['NCI', /NEUROCIR/], ['GOB', /GINEC|OBSTET|^GOB?$|^GIN\b/], ['ORT', /ORTOP|TRAUMAT|^ORT\b/], ['PSI', /PSIQ|^PSI\b/],
+const ESP_ALIAS = [   // ordem importa: os mais específicos vêm antes (NEUROPEDIATRIA deve virar NPD, não PED nem NEU)
+  ['NPD', /NEUROPED|NEURO PED|^NPD\b/], ['NCI', /NEUROCIR/], ['GOB', /GINEC|OBSTET|^GOB?$|^GIN\b/], ['ORT', /ORTOP|TRAUMAT|^ORT\b/], ['PSI', /PSIQ|^PSI\b/],
   ['NEU', /NEUROL|^NEU\b|^NRL\b/], ['URO', /UROL|^URO\b/], ['CLM', /CLINICA MEDICA|CLINICO GERAL|CLINICA GERAL|MEDICINA INTERNA|^CLM\b|^CG\b|^CLI\b/],
   ['CAR', /CARDIO|^CAR\b/], ['END', /ENDOCRIN|^END\b/], ['DER', /DERMAT|^DER\b/], ['PED', /PEDIAT|^PED\b/], ['GER', /GERIAT|^GER\b/],
   ['GAS', /GASTRO|^GAS\b|^GEN\b/], ['REU', /REUMAT|^REU\b/], ['PNE', /PNEUMO|^PNE\b/], ['OFT', /OFTAL|^OFT\b/], ['OTO', /OTORRIN|^OTO\b|^ORL\b/],
@@ -1565,7 +1565,8 @@ function htmlEsps(A, est){
   }
   // exato: cada célula = visitados de total
   const g = new Map();
-  A.docs.forEach(d => { const k = d.espK; if (!g.has(k)) g.set(k, {esp: d.esp, n:0, v:0, n1:0, v1:0, n2:0, v2:0}); const x = g.get(k);
+  A.docs.forEach(d => { const k = d.espK; if (!g.has(k)) g.set(k, {esp: d.esp, rot: new Map(), n:0, v:0, n1:0, v1:0, n2:0, v2:0}); const x = g.get(k);
+    x.rot.set(d.esp, (x.rot.get(d.esp) || 0) + 1); x.esp = [...x.rot].sort((p, q) => q[1] - p[1])[0][0];   // rótulo = grafia mais frequente no grupo
     x.n++; if (d.visitado) x.v++; if (d.cat === 1){ x.n1++; if (d.visitado) x.v1++; } if (d.cat === 2){ x.n2++; if (d.visitado) x.v2++; } });
   const rows = [...g.values()].sort((a, b) => (b.n1 - b.v1) - (a.n1 - a.v1) || b.n1 - a.n1 || b.n - a.n);
   const cel = (v, n) => !n ? '<span class="muted">–</span>' : `${v} de ${n}${n - v ? ` <span class="pill r">faltam ${n - v}</span>` : ' <span class="pill g">todos</span>'}`;
